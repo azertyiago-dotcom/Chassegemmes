@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <title>Gemmes Pro - Cartographie</title>
     
-    <!-- Inclusion des feuilles de style et scripts de la carte Leaflet -->
-    <link rel="stylesheet" href="https://unpkg.com" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-    <script src="https://unpkg.com" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- Inclusion sécurisée et stable de la bibliothèque cartographique Leaflet -->
+    <link rel="stylesheet" href="https://cloudflare.com" />
+    <script src="https://cloudflare.com"></script>
 
     <style>
         html, body {
@@ -20,7 +20,6 @@
             overflow: hidden;
         }
 
-        /* Interface globale scindée en deux : Carte en haut, données en bas */
         #main-container {
             display: flex;
             flex-direction: column;
@@ -80,15 +79,44 @@
             font-family: sans-serif;
             margin-right: 4px;
         }
+
+        /* Bouton ergonomique de recentrage pour le terrain */
+        .btn-recenter {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: #162447;
+            color: #00f2fe;
+            border: 2px solid #4facfe;
+            padding: 10px;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            font-weight: bold;
+            font-size: 18px;
+            cursor: pointer;
+            z-index: 999;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-recenter:active {
+            background-color: #4facfe;
+            color: #162447;
+        }
     </style>
 </head>
 <body>
 
     <div id="main-container">
-        <!-- Zone d'affichage de la carte interactive -->
+        <!-- Bouton flottant pour recadrer la carte sur soi -->
+        <button class="btn-recenter" onclick="recenterMap()" title="Recentrer sur ma position">🎯</button>
+
+        <!-- Zone d'affichage de la carte -->
         <div id="map"></div>
 
-        <!-- Tableau de bord inférieur -->
+        <!-- Tableau de bord de suivi GPS -->
         <div class="panel-inférieur">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <h1>Gemmes Pro Maps</h1>
@@ -96,13 +124,13 @@
             </div>
             
             <div class="geo-grid">
-                <div class="geo-item"><span>GPS:</span><span id="coordsAffichage">En attente...</span></div>
+                <div class="geo-item"><span>GPS:</span><span id="coordsAffichage">Recherche...</span></div>
                 <div class="geo-item" style="text-align: right;"><span>Précision:</span><span id="acc">--</span></div>
             </div>
         </div>
     </div>
 
-    <!-- Chargement des scripts de votre architecture mobile -->
+    <!-- Chargement ordonné des bases et scripts natifs -->
     <script src="gisements.js"></script>
     <script src="cordova.js"></script>
     <script>
@@ -111,6 +139,8 @@
         let userMarker = null;
         let userCircle = null;
         let gisementsMarqueurs = [];
+        let useHighAccuracy = true; 
+        let maDernierePosition = null;
 
         function updateStatus(text, statusClass) {
             const statusEl = document.getElementById('status');
@@ -121,50 +151,52 @@
         }
 
         window.addEventListener('DOMContentLoaded', () => {
-            // 1. Initialisation par défaut de la carte centrée sur la France
-            map = L.map('map', {
-                zoomControl: false // Désactivé pour épurer l'interface mobile
-            }).setView([46.6033, 1.8883], 6);
-
-            // Ajout des boutons de zoom en bas à droite pour une meilleure ergonomie tactile
+            // Initialisation de base par défaut centrée sur la France
+            map = L.map('map', { zoomControl: false }).setView([46.6033, 1.8883], 6);
             L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-            // Chargement des tuiles OpenStreetMap cartographiques gratuites
+            // Chargement des tuiles OpenStreetMap gratuites
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '© OpenStreetMap'
             }).addTo(map);
 
-            // 2. Lancement des capteurs Cordova natifs
+            // Attente du déclenchement du conteneur Cordova
             document.addEventListener('deviceready', () => {
-                updateStatus('Radar Synchro', 'searching');
+                updateStatus('Modems Synchro', 'searching');
                 startGeolocation();
             }, false);
         });
 
         function startGeolocation() {
             if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-            watchId = navigator.geolocation.watchPosition(onSuccess, handleGeoError, {
-                enableHighAccuracy: true,
-                maximumAge: 0,
-                timeout: 10000
-            });
+            
+            // Configuration des options de secours pour empêcher les blocages indéfinis
+            const options = {
+                enableHighAccuracy: useHighAccuracy,
+                maximumAge: 3000, 
+                timeout: 5000 // Déclenche un timeout après 5 secondes si aucun satellite ne répond
+            };
+
+            watchId = navigator.geolocation.watchPosition(onSuccess, handleGeoError, options);
         }
 
         function onSuccess(position) {
-            updateStatus('Carte Active', 'active');
+            updateStatus(useHighAccuracy ? 'GPS Haute Précision' : 'Position Réseau', 'active');
+            
             const myLat = position.coords.latitude;
             const myLng = position.coords.longitude;
             const accuracy = position.coords.accuracy;
+            maDernierePosition = [myLat, myLng];
 
+            // Remplissage sécurisé des éléments de l'interface
             document.getElementById('coordsAffichage').textContent = myLat.toFixed(4) + " , " + myLng.toFixed(4);
             document.getElementById('acc').textContent = accuracy.toFixed(0) + ' m';
 
-            // 3. Gestion de la position utilisateur sur la carte
+            // Dessin et mise à jour du point de l'utilisateur
             if (!userMarker) {
-                // Premier point trouvé : on crée le marqueur bleu et on centre la carte
                 userMarker = L.marker([myLat, myLng]).addTo(map)
-                    .bindPopup("<b>Votre position de prospection</b>").openPopup();
+                    .bindPopup("<b>Votre position de fouille</b>").openPopup();
                 
                 userCircle = L.circle([myLat, myLng], {
                     radius: accuracy,
@@ -173,13 +205,9 @@
                     fillOpacity: 0.15
                 }).addTo(map);
 
-                // Zoom automatique serré autour de votre position réelle
-                map.setView([myLat, myLng], 13);
-                
-                // Dessiner le catalogue des gisements du fichier gisements.js
+                map.setView([myLat, myLng], 12);
                 chargerMarqueursGisements();
             } else {
-                // Mises à jour en direct pendant que vous marchez sur le terrain
                 userMarker.setLatLng([myLat, myLng]);
                 userCircle.setLatLng([myLat, myLng]);
                 userCircle.setRadius(accuracy);
@@ -187,30 +215,52 @@
         }
 
         function chargerMarqueursGisements() {
-            // Nettoyage préventif
             gisementsMarqueurs.forEach(m => map.removeLayer(m));
             gisementsMarqueurs = [];
 
-            // Icône personnalisée rouge pour distinguer les gisements
+            // Marqueurs rouges pour distinguer visuellement les filons
             const gemIcon = L.icon({
-                iconUrl: 'https://githubusercontent.com',
+                iconUrl: 'https://cloudflare.com',
                 shadowUrl: 'https://cloudflare.com',
-                iconSize: [25, 41],
-                iconAnchor: [12, 41],
+                iconSize:,
+                iconAnchor:,
                 popupAnchor: [1, -34],
                 shadowSize: [41, 41]
             });
 
-            // Boucle de lecture de la base réseau embarquée
-            REPERTOIRE_GISEMENTS.forEach(g => {
-                const marker = L.marker([g.lat, g.lng], { icon: gemIcon }).addTo(map)
-                    .bindPopup(`<b>${g.nom}</b><br><span style="font-size:12px;color:#555;">${g.details}</span>`);
-                gisementsMarqueurs.push(marker);
-            });
+            // Boucle de lecture sécurisée du fichier gisements.js embarqué
+            if (typeof REPERTOIRE_GISEMENTS !== 'undefined') {
+                REPERTOIRE_GISEMENTS.forEach(g => {
+                    const marker = L.marker([g.lat, g.lng], { icon: gemIcon }).addTo(map)
+                        .bindPopup(`<b>${g.nom}</b><br><span style="font-size:12px;color:#555;">${g.details}</span>`);
+                    gisementsMarqueurs.push(marker);
+                });
+            }
         }
 
+        // REPRISE AUTOMATIQUE EN CAS DE PERTE DE SIGNAL (INTÉRIEUR / FORÊT BLANCHE)
         function handleGeoError(error) {
-            updateStatus('Recherche satellites...', 'searching');
+            if (error.code === 3) {
+                // Timeout détecté : On tente immédiatement de basculer sur le réseau Wi-Fi/Antennes
+                if (useHighAccuracy) {
+                    useHighAccuracy = false;
+                    startGeolocation();
+                } else {
+                    updateStatus('Satellites introuvables', 'searching');
+                }
+            } else if (error.code === 1) {
+                updateStatus('Droits GPS requis', 'searching');
+            } else {
+                updateStatus('Recherche signal...', 'searching');
+            }
+        }
+
+        // Fonction liée au bouton flottant pour recentrer manuellement
+        function recenterMap() {
+            if (maDernierePosition && map) {
+                map.setView(maDernierePosition, 14);
+                if (userMarker) userMarker.openPopup();
+            }
         }
     </script>
 </body>
