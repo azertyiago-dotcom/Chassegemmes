@@ -76,7 +76,7 @@
         .label { color: #84a9ac; font-weight: bold; }
         .value { color: #00f2fe; font-family: monospace; font-size: 17px; }
         
-        /* État du signal */
+        /* État du signal et boutons */
         .status-badge {
             display: inline-block;
             padding: 6px 12px;
@@ -87,6 +87,29 @@
         }
         .searching { background-color: #b83b5e; color: #fff; }
         .active { background-color: #00b16a; color: #fff; }
+
+        .mode-container {
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+        .btn-mode {
+            background-color: #1f4068;
+            color: white;
+            border: 2px solid #4facfe;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        .btn-mode.gps-active {
+            background-color: #00f2fe;
+            color: #1a1a2e;
+            border-color: #fff;
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.6);
+        }
     </style>
 </head>
 <body>
@@ -99,11 +122,20 @@
         <div class="radar-sweep"></div>
     </div>
 
-    <!-- Badge d'état -->
-    <div id="status" class="status-badge searching">Recherche du signal GPS...</div>
+    <!-- Badge d'état du signal -->
+    <div id="status" class="status-badge searching">Initialisation...</div>
+
+    <!-- Sélecteur de Mode -->
+    <div class="mode-container">
+        <button id="modeBtn" class="btn-mode" onclick="toggleMode()">Mode : Wi-Fi / Réseau</button>
+    </div>
 
     <!-- Affichage des données géologiques -->
     <div class="geo-box">
+        <div class="geo-line">
+            <span class="label">Source du signal :</span>
+            <span id="signalSource" class="value" style="color: #4facfe;">Wi-Fi / Cellulaire</span>
+        </div>
         <div class="geo-line">
             <span class="label">Latitude :</span>
             <span id="lat" class="value">--</span>
@@ -126,60 +158,90 @@
     <script src="cordova.js"></script>
     
     <script>
-        // On attend que Cordova soit entièrement initialisé sur le smartphone
-        document.addEventListener('deviceready', startTracking, false);
+        let watchId = null;
+        let useHighAccuracy = false; // Faux au démarrage pour prioriser le Wi-Fi/Réseau
 
-        function startTracking() {
-            const statusBadge = document.getElementById('status');
+        // On attend que Cordova soit prêt
+        document.addEventListener('deviceready', initTracking, false);
 
-            // Options de géolocalisation pour maximiser la précision (Active le vrai composant GPS)
-            const geoOptions = {
-                enableHighAccuracy: true, // Force l'utilisation du GPS matériel à haute précision
-                maximumAge: 0,            // Ne pas utiliser de position en cache
-                timeout: 10000            // Temps limite d'attente du signal (10s)
-            };
-
-            // Regarder la position en continu (Met à jour dès que l'utilisateur bouge)
-            navigator.geolocation.watchPosition(successLocation, errorLocation, geoOptions);
+        function initTracking() {
+            startWatch();
         }
 
-        // Exécuté automatiquement à chaque déplacement ou mise à jour du signal
+        function startWatch() {
+            // Si une surveillance est déjà active, on l'arrête d'abord
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+
+            const statusBadge = document.getElementById('status');
+            statusBadge.innerText = useHighAccuracy ? "Recherche signal Satellites GPS..." : "Recherche position Wi-Fi...";
+            statusBadge.className = "status-badge searching";
+
+            const geoOptions = {
+                enableHighAccuracy: useHighAccuracy, // Bascule dynamiquement selon le choix
+                maximumAge: 0,
+                timeout: 12000
+            };
+
+            // Lancement de la surveillance en continu
+            watchId = navigator.geolocation.watchPosition(successLocation, errorLocation, geoOptions);
+        }
+
+        // Changement de mode au clic sur le bouton
+        function toggleMode() {
+            useHighAccuracy = !useHighAccuracy;
+            
+            const btn = document.getElementById('modeBtn');
+            const sourceText = document.getElementById('signalSource');
+
+            if (useHighAccuracy) {
+                btn.innerText = "MODE : HAUTE PRÉCISION (GPS)";
+                btn.className = "btn-mode gps-active";
+                sourceText.innerText = "Satellites GPS";
+            } else {
+                btn.innerText = "Mode : Wi-Fi / Réseau";
+                btn.className = "btn-mode";
+                sourceText.innerText = "Wi-Fi / Cellulaire";
+            }
+
+            // Relancer le suivi avec la nouvelle configuration
+            startWatch();
+        }
+
         function successLocation(position) {
             const statusBadge = document.getElementById('status');
-            statusBadge.innerText = "Signal GPS Actif";
+            statusBadge.innerText = useHighAccuracy ? "Signal GPS Actif" : "Position Wi-Fi Active";
             statusBadge.className = "status-badge active";
 
-            // Injection des données réelles dans l'interface graphique
             document.getElementById('lat').innerText = position.coords.latitude.toFixed(6) + "°";
             document.getElementById('lng').innerText = position.coords.longitude.toFixed(6) + "°";
             
-            // L'altitude peut renvoyer "null" si le GPS ne capte pas assez de satellites en 3D
             if (position.coords.altitude !== null) {
                 document.getElementById('alt').innerText = position.coords.altitude.toFixed(1) + " m";
             } else {
-                document.getElementById('alt').innerText = "Non disponible";
+                document.getElementById('alt').innerText = "Non disponible (Wi-Fi)";
             }
 
             document.getElementById('acc').innerText = "± " + position.coords.accuracy.toFixed(0) + " m";
         }
 
-        // Exécuté si le GPS est désactivé ou si la permission est refusée
         function errorLocation(error) {
             const statusBadge = document.getElementById('status');
             statusBadge.className = "status-badge searching";
             
             switch(error.code) {
                 case error.PERMISSION_DENIED:
-                    statusBadge.innerText = "Erreur : Permission GPS refusée";
+                    statusBadge.innerText = "Erreur : Accès refusé";
                     break;
                 case error.POSITION_UNAVAILABLE:
-                    statusBadge.innerText = "Erreur : Signal GPS introuvable";
+                    statusBadge.innerText = "Signal indisponible sur ce mode";
                     break;
                 case error.TIMEOUT:
-                    statusBadge.innerText = "Erreur : Temps d'attente dépassé";
+                    statusBadge.innerText = "Recherche de coordonnées...";
                     break;
                 default:
-                    statusBadge.innerText = "Erreur GPS inconnue";
+                    statusBadge.innerText = "Erreur de localisation";
                     break;
             }
         }
