@@ -38,24 +38,37 @@ jobs:
 
     - name: Structure des dossiers et création du projet natif Android
       run: |
-        # Création propre du dossier www si absent
-        if [ ! -d "www" ]; then
-          mkdir -p www
-          if [ -f "index.html" ]; then
-            cp index.html www/
-          fi
-        fi
-        
-        # Nettoyage préventif d'un ancien dossier
+        # Nettoyage préventif
         rm -rf appli_native
         
-        # Création et bascule forcée dans le dossier Cordova
+        # 1. Création de l'architecture officielle Cordova
         cordova create appli_native com.chasseurdegemmes.pro "GemmesPro"
+        
+        # 2. Copie du fichier de configuration global
         cp config.xml appli_native/config.xml
-        cp -r www/* appli_native/www/
+        
+        # 3. Sécurité : Nettoyage du dossier www généré par défaut pour éviter les conflits
+        rm -f appli_native/www/index.html
+        rm -rf appli_native/www/js
+        rm -rf appli_native/www/css
+        rm -rf appli_native/www/img
+        
+        # 4. Injection intelligente de VOS fichiers (gère si vous êtes à la racine ou dans un dossier www)
+        if [ -d "www" ]; then
+          cp -r www/* appli_native/www/
+        else
+          cp index.html appli_native/www/
+          # Copie aussi vos dossiers css/js/img s'ils existent à la racine de votre Git
+          cp -r css appli_native/www/ 2>/dev/null || true
+          cp -r js appli_native/www/ 2>/dev/null || true
+          cp -r img appli_native/www/ 2>/dev/null || true
+        fi
+        
+        # Vérification visuelle dans les logs que index.html est au bon endroit
+        echo "=== CONTENU DU DOSSIER WWW DE CORDOVA ==="
+        ls -la appli_native/www/
         
         cd appli_native
-        # On force l'ajout et on vérifie qu'il se crée bien
         cordova platform add android@12.0.0 --verbose
 
     - name: Installation du plugin Cordova Géolocalisation Officiel
@@ -71,7 +84,6 @@ jobs:
     - name: Extraction de l'APK vers la racine
       run: |
         mkdir -p output_apk
-        # Recherche large à partir de la racine pour ne rien rater
         find . -name "*.apk" -exec cp {} output_apk/ \;
         echo "Contenu du dossier de sortie :"
         ls -la output_apk/
