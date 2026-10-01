@@ -4,10 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     
-    <!-- CSP permissive pour s'assurer qu'Android laisse passer l'affichage géologique -->
-    <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: gap:">
+    <!-- Sécurité Android : Autorise le fonctionnement en circuit fermé local -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';">
 
-    <title>Gemmes Pro - Solution Finale</title>
+    <title>Gemmes Pro - Version Terrain Autonome</title>
     
     <link rel="stylesheet" href="leaflet.css" />
     <script src="leaflet.js"></script>
@@ -31,7 +31,7 @@
             flex: 1;
             width: 100%;
             z-index: 1;
-            background-color: #111b30;
+            background-color: #0f172a; /* Fond bleu nuit radar */
         }
         .panel-inférieur {
             background-color: #162447;
@@ -73,11 +73,12 @@
 <body>
 
     <div id="main-container">
+        <!-- Zone radar radar de prospection -->
         <div id="map"></div>
 
         <div class="panel-inférieur">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h1>Gemmes Pro Maps</h1>
+                <h1>Gemmes Pro Radar</h1>
                 <div id="status" class="status-badge searching">Initialisation...</div>
             </div>
             <div class="geo-grid">
@@ -94,6 +95,7 @@
         let map = null;
         let userMarker = null;
         let systemeDemarre = false;
+        let gisementsCalcules = [];
 
         function updateStatus(text, statusClass) {
             const el = document.getElementById('status');
@@ -103,43 +105,41 @@
             }
         }
 
-        // FONCTION DE LANCEMENT UNIQUE ET SÉCURISÉE
         function demarrerApplication() {
-            if (systemeDemarre) return; // Évite les doubles lancements
+            if (systemeDemarre) return;
             systemeDemarre = true;
 
             updateStatus('Recherche satellites...', 'searching');
             
-            // Si le téléphone possède une puce HTML5 standard ou Cordova, on lance la capture
             if (navigator.geolocation) {
                 navigator.geolocation.watchPosition(onLocationSuccess, onLocationError, {
-                    enableHighAccuracy: false, // Plus permissif pour forcer le premier affichage
-                    maximumAge: 5000,
+                    enableHighAccuracy: true,
+                    maximumAge: 0,
                     timeout: 10000
                 });
             } else {
-                updateStatus('Erreur Matériel GPS', 'searching');
+                updateStatus('Erreur GPS', 'searching');
             }
         }
 
-        // Déclencheur 1 : Cordova est prêt
-        document.addEventListener('deviceready', () => {
-            console.log("Démarrage via Cordova deviceready");
-            demarrerApplication();
-        }, false);
-
-        // Déclencheur 2 : Sécurité Web standard (si Cordova met trop de temps ou bloque)
+        document.addEventListener('deviceready', demarrerApplication, false);
         window.addEventListener('DOMContentLoaded', () => {
-            setTimeout(() => {
-                if (!systemeDemarre) {
-                    console.log("Démarrage via Secours Automatique (WebView standard)");
-                    demarrerApplication();
-                }
-            }, 1500); // Après 1,5 seconde, on force l'allumage quoi qu'il arrive
+            setTimeout(() => { if (!systemeDemarre) demarrerApplication(); }, 1500);
         });
 
+        // FORMULE DE HAVERSINE : Calcul de distance de prospection
+        function calculerDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; 
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+        }
+
         function onLocationSuccess(position) {
-            updateStatus('GPS Actif', 'active');
+            updateStatus('Radar Actif', 'active');
             
             const lat = position.coords.latitude;
             const lng = position.coords.longitude;
@@ -148,40 +148,52 @@
             document.getElementById('coordsAffichage').textContent = lat.toFixed(4) + " , " + lng.toFixed(4);
             document.getElementById('acc').textContent = accuracy.toFixed(0) + ' m';
 
+            // Initialisation de la carte en mode Radar Vectoriel (sans TileLayer internet)
             if (!map) {
-                map = L.map('map', { zoomControl: true }).setView([lat, lng], 12);
-                
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
-                    maxZoom: 19 
-                }).addTo(map);
+                map = L.map('map', { 
+                    zoomControl: true,
+                    attributionControl: false 
+                }).setView([lat, lng], 11);
 
-                chargerMarqueursGisements();
+                // CORRECTION RADICALE : Dessin d'une grille de cercles concentriques (cercles de distance de 5km, 10km, 20km)
+                L.circle([lat, lng], { radius: 2000, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map);
+                L.circle([lat, lng], { radius: 5000, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map);
+                L.circle([lat, lng], { radius: 10000, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map);
+
+                chargerMarqueursGisements(lat, lng);
             }
 
             if (!userMarker) {
                 userMarker = L.circleMarker([lat, lng], {
-                    radius: 9,
+                    radius: 10,
                     color: '#ffffff',
                     weight: 2,
                     fillColor: '#00f2fe',
-                    fillOpacity: 0.9
-                }).addTo(map).bindPopup("Vous êtes ici").openPopup();
+                    fillOpacity: 1
+                }).addTo(map).bindPopup("<b>Ma Position de Prospection</b>").openPopup();
             } else {
                 userMarker.setLatLng([lat, lng]);
             }
         }
 
-        function chargerMarqueursGisements() {
+        function chargerMarqueursGisements(myLat, myLng) {
             if (typeof REPERTOIRE_GISEMENTS !== 'undefined' && map) {
                 REPERTOIRE_GISEMENTS.forEach(g => {
+                    // Calcul de la distance réelle entre vous et le gisement
+                    const distanceGis = calculerDistance(myLat, myLng, g.lat, g.lng);
+                    let affichageDist = distanceGis < 1 
+                        ? Math.round(distanceGis * 1000) + " m" 
+                        : distanceGis.toFixed(1) + " km";
+
+                    // Affichage sous forme de balise géométrique locale
                     L.circleMarker([g.lat, g.lng], {
                         radius: 8,
                         color: '#1a1a2e',
                         weight: 1,
                         fillColor: '#b83b5e',
-                        fillOpacity: 0.8
+                        fillOpacity: 0.9
                     }).addTo(map)
-                      .bindPopup(`<b>${g.nom}</b><br><span style="font-size:11px;color:#333;">${g.details}</span>`);
+                      .bindPopup(`<b>${g.nom}</b><br><span style="color:#00f2fe;font-weight:bold;">Distance : ${affichageDist}</span><br><span style="font-size:11px;color:#ccc;">${g.details}</span>`);
                 });
             }
         }
