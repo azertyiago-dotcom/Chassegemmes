@@ -20,7 +20,6 @@ jobs:
         java-version: |
           17
           11
-        # On installe les deux versions : Java 17 sera la version par défaut au début
 
     - name: Installation automatique de Gradle 7.6
       uses: gradle/actions/setup-gradle@v4
@@ -29,7 +28,8 @@ jobs:
 
     - name: Installation des Android Build Tools 33.0.2 manquants
       run: |
-        # Cette commande s'exécute avec Java 17 par défaut, donc SdkManager ne plantera plus !
+        # CORRIGÉ : On force temporairement la variable JAVA_HOME sur Java 17 pour le SdkManager
+        export JAVA_HOME=$JAVA_HOME_17_X64
         echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;33.0.2"
 
     - name: Configuration de NodeJS
@@ -52,7 +52,7 @@ jobs:
     - name: Compilation de l'APK Final
       run: |
         cd appli_native
-        # Juste avant de compiler, on force Cordova à utiliser Java 11 pour rester compatible avec Android 12 et Gradle 7.6
+        # On repasse sur Java 11 pour que Cordova et Gradle 7.6 compilent sans erreur
         export JAVA_HOME=$JAVA_HOME_11_X64
         CORDOVA_ANDROID_GRADLE_VERSION="7.6" cordova build android --debug
         
