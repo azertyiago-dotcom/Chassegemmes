@@ -60,10 +60,18 @@ jobs:
         cd appli_native
         cordova build android --debug
 
-    # Étape de débogage et de sécurité : recherche globale de l'APK pour forcer sa capture
-    - name: Livraison du fichier APK (Scan Récursif Complet)
+    # NOUVELLE ÉTAPE CRITIQUE : Extrait l'APK du sous-dossier et le met à la racine
+    - name: Extraction de l'APK vers la racine
+      run: |
+        mkdir -p output_apk
+        find appli_native/platforms/android/ -name "*.apk" -exec cp {} output_apk/ \;
+        echo "Fichiers copiés dans output_apk :"
+        ls -la output_apk/
+
+    # Livraison ciblée et garantie
+    - name: Livraison du fichier APK
       uses: actions/upload-artifact@v4
       with:
         name: Application-Gemmes-Montagne
-        path: |
-          appli_native/**/*.apk
+        path: output_apk/*.apk
+        if-no-files-found: error
