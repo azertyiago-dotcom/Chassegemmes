@@ -117,7 +117,7 @@
         <div class="radar-sweep"></div>
     </div>
 
-    <div id="status" class="status-badge searching">Initialisation...</div>
+    <div id="status" class="status-badge searching">Démarrage...</div>
 
     <div class="mode-container">
         <button id="modeBtn" class="btn-mode" onclick="toggleMode()">Mode : Wi-Fi / Réseau</button>
@@ -151,33 +151,40 @@
         let watchId = null;
         let useHighAccuracy = false;
 
+        // Événement Cordova d'initialisation du téléphone
         document.addEventListener('deviceready', () => {
-            // Étape obligatoire : On effectue une première requête rapide pour forcer Android à afficher la popup de demande d'autorisation
-            updateStatus('Vérification des accès...', 'searching');
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    // Si l'utilisateur accepte, on lance le suivi en temps réel (watchPosition)
+            updateStatus('Moteur Cordova prêt...', 'searching');
+            startGeolocation();
+        }, false);
+
+        // Sécurité si Cordova met trop de temps à se charger dans la WebView
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                const statusEl = document.getElementById('status');
+                if (statusEl.textContent === 'Démarrage...') {
+                    updateStatus('Initialisation Web alternative...', 'searching');
                     startGeolocation();
-                },
-                (error) => {
-                    handleGeoError(error);
-                },
-                { enableHighAccuracy: true, timeout: 5000 }
-            );
+                }
+            }, 2000);
         });
 
         function startGeolocation() {
-            updateStatus('Recherche du signal...', 'searching');
+            updateStatus('Demande du signal...', 'searching');
             if (watchId !== null) {
                 navigator.geolocation.clearWatch(watchId);
             }
             
-            // Lancement du tracker
-            watchId = navigator.geolocation.watchPosition(onSuccess, handleGeoError, {
-                enableHighAccuracy: useHighAccuracy,
-                maximumAge: 3000,
-                timeout: 25000 // Augmentation du timeout pour laisser le temps aux puces GPS froides de s'activer
-            });
+            // On lance directement le suivi en temps réel. 
+            // C'est cette méthode native qui va forcer l'apparition immédiate de la popup de permission d'Android.
+            watchId = navigator.geolocation.watchPosition(
+                onSuccess, 
+                handleGeoError, 
+                {
+                    enableHighAccuracy: useHighAccuracy,
+                    maximumAge: 0,        // Forcer le système à chercher une nouvelle position et non un cache
+                    timeout: 20000        // Laisser 20 secondes au matériel pour accrocher un satellite ou une antenne
+                }
+            );
         }
 
         function onSuccess(position) {
@@ -186,17 +193,19 @@
             document.getElementById('lng').textContent = position.coords.longitude.toFixed(6);
             document.getElementById('alt').textContent = position.coords.altitude !== null ? position.coords.altitude.toFixed(2) + ' m' : '--';
             document.getElementById('acc').textContent = position.coords.accuracy.toFixed(2) + ' m';
-            document.getElementById('signalSource').textContent = useHighAccuracy ? 'GPS' : 'Wi-Fi / Cellulaire';
+            document.getElementById('signalSource').textContent = useHighAccuracy ? 'GPS (Haute Précision)' : 'Wi-Fi / Cellulaire';
         }
 
         function handleGeoError(error) {
-            let msg = 'Erreur inconnue';
+            let msg = 'Erreur de recherche';
             if (error.code === 1) {
-                msg = 'Accès Localisation Refusé';
+                msg = 'Autorisation refusée dans Android';
             } else if (error.code === 2) {
                 msg = 'Position indisponible (Activez le GPS)';
             } else if (error.code === 3) {
-                msg = 'Recherche du signal trop longue...';
+                msg = 'Délai d\'attente dépassé (Recherche...)';
+                // En cas de timeout, on relance doucement la recherche
+                setTimeout(startGeolocation, 2000);
             }
             updateStatus(msg, 'searching');
         }
@@ -205,7 +214,7 @@
             useHighAccuracy = !useHighAccuracy;
             const btn = document.getElementById('modeBtn');
             btn.classList.toggle('gps-active', useHighAccuracy);
-            btn.textContent = 'Mode : ' + (useHighAccuracy ? 'GPS' : 'Wi-Fi / Réseau');
+            btn.textContent = 'Mode : ' + (useHighAccuracy ? 'GPS (Précis)' : 'Wi-Fi / Réseau');
             startGeolocation();
         }
     </script>
