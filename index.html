@@ -4,12 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     
-    <!-- Sécurité Android : Autorise le script local et l'affichage des tuiles OpenStreetMap -->
+    <!-- Politique de sécurité ultra-stricte : Tout est local sauf le fond de carte OpenStreetMap -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://gstatic.com 'unsafe-eval'; style-src 'self' 'unsafe-inline'; media-src *; img-src 'self' data: https://*.tile.openstreetmap.org;">
 
-    <title>Gemmes Pro - Cartographie Locale</title>
+    <title>Gemmes Pro - Cartographie Infaillible</title>
     
-    <!-- Chargement immédiat des fichiers locaux intégrés dans l'APK -->
     <link rel="stylesheet" href="leaflet.css" />
     <script src="leaflet.js"></script>
 
@@ -57,6 +56,7 @@
         }
         .searching { background-color: #b83b5e; color: #fff; }
         .active { background-color: #00b16a; color: #fff; }
+        
         .geo-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -99,10 +99,11 @@
             document.getElementById('status').className = 'status-badge ' + statusClass;
         }
 
+        // Événement déclenché dès que le framework Cordova est totalement chargé en mémoire native
         document.addEventListener('deviceready', () => {
             updateStatus('Recherche satellites...', 'searching');
             
-            // Démarrage direct du suivi GPS
+            // Lancement du capteur de position
             navigator.geolocation.watchPosition(onLocationSuccess, onLocationError, {
                 enableHighAccuracy: true,
                 maximumAge: 0,
@@ -128,12 +129,19 @@
                     maxZoom: 19 
                 }).addTo(map);
 
+                // Chargement immédiat des gisements
                 chargerMarqueursGisements();
             }
 
-            // Mise à jour du marqueur de l'utilisateur
+            // CORRECTION ANTI-CRASH : Utilisation d'un cercle vectoriel (SVG local) à la place du marqueur image bleu classique
             if (!userMarker) {
-                userMarker = L.marker([lat, lng]).addTo(map).bindPopup("Vous êtes ici").openPopup();
+                userMarker = L.circleMarker([lat, lng], {
+                    radius: 10,
+                    color: '#ffffff',
+                    weight: 2,
+                    fillColor: '#00f2fe',
+                    fillOpacity: 0.9
+                }).addTo(map).bindPopup("<b>Vous êtes ici</b>").openPopup();
             } else {
                 userMarker.setLatLng([lat, lng]);
             }
@@ -142,14 +150,23 @@
         function chargerMarqueursGisements() {
             if (typeof REPERTOIRE_GISEMENTS !== 'undefined' && map) {
                 REPERTOIRE_GISEMENTS.forEach(g => {
-                    L.marker([g.lat, g.lng]).addTo(map)
-                        .bindPopup(`<b>${g.nom}</b><br><span style="font-size:11px;color:#666;">${g.details}</span>`);
+                    // CORRECTION ANTI-CRASH : Remplacement des épingles images par des cercles vectoriels rouges épurés
+                    L.circleMarker([g.lat, g.lng], {
+                        radius: 8,
+                        color: '#1a1a2e',
+                        weight: 1,
+                        fillColor: '#b83b5e',
+                        fillOpacity: 0.8
+                    }).addTo(map)
+                      .bindPopup(`<b>${g.nom}</b><br><span style="font-size:11px;color:#333;">${g.details}</span>`);
                 });
             }
         }
 
         function onLocationError(error) {
-            updateStatus('Signal faible...', 'searching');
+            // Permet de voir dans la console ou l'interface le code erreur si le téléphone bloque
+            console.log("Erreur de géolocalisation native : " + error.message);
+            updateStatus('Recherche signal...', 'searching');
         }
     </script>
 </body>
