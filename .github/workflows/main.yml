@@ -13,22 +13,19 @@ jobs:
     - name: Récupération du code
       uses: actions/checkout@v4
 
-    - name: Configuration de l'environnement Java (Hybride)
+    - name: Configuration de l'environnement Java (Stable pour Gradle 7.6)
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: |
-          17
-          11
+        java-version: '11'
 
     - name: Installation automatique de Gradle 7.6
       uses: gradle/actions/setup-gradle@v4
       with:
         gradle-version: '7.6'
 
-    - name: Installation des Android Build Tools 33.0.2 manquants
+    - name: Installation des Android Build Tools 33.0.2
       run: |
-        export JAVA_HOME=$JAVA_HOME_17_X64
         echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;33.0.2"
 
     - name: Configuration de NodeJS
@@ -39,26 +36,32 @@ jobs:
     - name: Installation globale de Cordova
       run: npm install -g cordova
 
-    - name: Création du projet natif Android
+    - name: Structure des dossiers et création du projet natif Android
       run: |
+        # Crée un dossier www temporaire si index.html est à la racine de votre dépôt Git
+        if [ ! -d "www" ]; then
+          mkdir www
+          cp index.html www/ 2>/dev/null || true
+        fi
+        
+        # Création de l'espace Cordova
         cordova create appli_native com.chasseurdegemmes.pro "GemmesPro"
         cp config.xml appli_native/config.xml
         cp -r www/* appli_native/www/
+        
         cd appli_native
         cordova platform add android@12.0.0
 
-    - name: Installation des plugins Cordova nécessaires
+    - name: Installation du plugin Cordova Géolocalisation Officiel
       run: |
         cd appli_native
+        # Le plugin officiel suffit amplement et gère ses propres permissions sans planter le build
         cordova plugin add cordova-plugin-geolocation@^5.0.0
-        cordova plugin add cordova-plugin-android-permissions@^1.0.0
-        cordova plugin add cordova-plugin-background-mode-fixed
 
     - name: Compilation de l'APK Final
       run: |
         cd appli_native
-        export JAVA_HOME=$JAVA_HOME_11_X64
-        CORDOVA_ANDROID_GRADLE_VERSION="7.6" cordova build android --debug
+        cordova build android --debug
 
     - name: Livraison du fichier APK
       uses: actions/upload-artifact@v4
