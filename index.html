@@ -4,11 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     
-    <!-- Sécurité Android : Autorise le fonctionnement en circuit fermé local -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';">
+    <!-- Sécurité permissive pour s'assurer que rien ne bloque l'affichage local -->
+    <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: gap:">
 
-    <title>Gemmes Pro - Version Terrain Autonome</title>
+    <title>Gemmes Pro - Radar &amp; Liste</title>
     
+    <!-- Fichiers cartographiques locaux (injectés par votre workflow) -->
     <link rel="stylesheet" href="leaflet.css" />
     <script src="leaflet.js"></script>
 
@@ -22,36 +23,51 @@
             color: #e2e2e2;
             overflow: hidden;
         }
+
         #main-container {
             display: flex;
             flex-direction: column;
             height: 100%;
         }
+
+        /* CORRECTION : Hauteur fixe absolue de 55% de l'écran pour le Radar */
         #map {
-            flex: 1;
+            height: 55vh;
             width: 100%;
-            z-index: 1;
-            background-color: #0f172a; /* Fond bleu nuit radar */
+            background-color: #0f172a;
         }
+
+        /* CORRECTION : Hauteur fixe de 45% pour le panneau des données et de la liste */
         .panel-inférieur {
+            height: 45vh;
             background-color: #162447;
             border-top: 3px solid #4facfe;
-            padding: 12px 20px;
-            z-index: 10;
+            box-sizing: border-box;
+            padding: 10px 15px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
+
+        .header-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
         h1 {
             color: #00f2fe;
-            margin: 0 0 4px 0;
+            margin: 0;
             text-transform: uppercase;
-            font-size: 18px;
+            font-size: 16px;
         }
+
         .status-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 10px;
             font-weight: bold;
-            margin-bottom: 8px;
             text-transform: uppercase;
         }
         .searching { background-color: #b83b5e; color: #fff; }
@@ -60,34 +76,76 @@
         .geo-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            font-size: 13px;
+            gap: 5px;
+            font-size: 12px;
             background: #1f4068;
-            padding: 8px;
-            border-radius: 6px;
+            padding: 6px;
+            border-radius: 4px;
+            margin-bottom: 8px;
         }
         .geo-item { font-family: monospace; color: #00f2fe; }
         .geo-item span { color: #84a9ac; font-family: sans-serif; }
+
+        /* Style de la liste défilante des gisements */
+        .gisement-title {
+            color: #4facfe;
+            font-size: 13px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            text-align: left;
+        }
+
+        .gisements-list {
+            flex: 1;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            overflow-y: auto; /* Permet de faire défiler les gisements s'il y en a beaucoup */
+        }
+
+        .gisement-item {
+            background: #111b30;
+            border-left: 4px solid #b83b5e;
+            margin-bottom: 5px;
+            padding: 8px 10px;
+            border-radius: 0 4px 4px 0;
+            text-align: left;
+            font-size: 13px;
+        }
+        .gisement-name { font-weight: bold; color: #fff; }
+        .gisement-dist { float: right; color: #00f2fe; font-weight: bold; font-family: monospace; }
+        .gisement-desc { font-size: 11px; color: #84a9ac; margin-top: 2px; }
     </style>
 </head>
 <body>
 
     <div id="main-container">
-        <!-- Zone radar radar de prospection -->
+        <!-- Partie Haute : Le Radar graphique -->
         <div id="map"></div>
 
+        <!-- Partie Basse : Le Tableau de bord & La Liste de Proximité -->
         <div class="panel-inférieur">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="header-panel">
                 <h1>Gemmes Pro Radar</h1>
                 <div id="status" class="status-badge searching">Initialisation...</div>
             </div>
+            
             <div class="geo-grid">
                 <div class="geo-item"><span>GPS:</span><span id="coordsAffichage">Recherche...</span></div>
                 <div class="geo-item" style="text-align: right;"><span>Précision:</span><span id="acc">--</span></div>
             </div>
+
+            <div class="gisement-title">📌 Gisements à proximité :</div>
+            
+            <!-- Liste dynamique contenant les gisements réels -->
+            <ul id="listeGisements" class="gisements-list">
+                <li style="text-align: center; color: #84a9ac; padding-top: 10px; font-size: 12px;">En attente de coordonnées satellites...</li>
+            </ul>
         </div>
     </div>
 
+    <!-- Chargement ordonné des fichiers -->
     <script src="gisements.js"></script>
     <script src="cordova.js"></script>
     
@@ -95,7 +153,6 @@
         let map = null;
         let userMarker = null;
         let systemeDemarre = false;
-        let gisementsCalcules = [];
 
         function updateStatus(text, statusClass) {
             const el = document.getElementById('status');
@@ -122,12 +179,13 @@
             }
         }
 
+        // Écouteurs de démarrage mobiles
         document.addEventListener('deviceready', demarrerApplication, false);
         window.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => { if (!systemeDemarre) demarrerApplication(); }, 1500);
         });
 
-        // FORMULE DE HAVERSINE : Calcul de distance de prospection
+        // Formule mathématique globale de distance
         function calculerDistance(lat1, lon1, lat2, lon2) {
             const R = 6371; 
             const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -148,59 +206,62 @@
             document.getElementById('coordsAffichage').textContent = lat.toFixed(4) + " , " + lng.toFixed(4);
             document.getElementById('acc').textContent = accuracy.toFixed(0) + ' m';
 
-            // Initialisation de la carte en mode Radar Vectoriel (sans TileLayer internet)
+            // 1. Gestion de la zone Radar graphique (Leaflet)
             if (!map) {
                 map = L.map('map', { 
                     zoomControl: true,
                     attributionControl: false 
                 }).setView([lat, lng], 11);
 
-                // CORRECTION RADICALE : Dessin d'une grille de cercles concentriques (cercles de distance de 5km, 10km, 20km)
+                // Cercles concentriques de distance
                 L.circle([lat, lng], { radius: 2000, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map);
                 L.circle([lat, lng], { radius: 5000, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map);
                 L.circle([lat, lng], { radius: 10000, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map);
-
-                chargerMarqueursGisements(lat, lng);
             }
 
             if (!userMarker) {
                 userMarker = L.circleMarker([lat, lng], {
-                    radius: 10,
+                    radius: 9,
                     color: '#ffffff',
                     weight: 2,
                     fillColor: '#00f2fe',
                     fillOpacity: 1
-                }).addTo(map).bindPopup("<b>Ma Position de Prospection</b>").openPopup();
+                }).addTo(map).bindPopup("Vous êtes ici");
             } else {
                 userMarker.setLatLng([lat, lng]);
             }
+
+            // 2. Traitement de la liste textuelle et des marqueurs graphiques
+            genererAffichageGisements(lat, lng);
         }
 
-        function chargerMarqueursGisements(myLat, myLng) {
-            if (typeof REPERTOIRE_GISEMENTS !== 'undefined' && map) {
-                REPERTOIRE_GISEMENTS.forEach(g => {
-                    // Calcul de la distance réelle entre vous et le gisement
-                    const distanceGis = calculerDistance(myLat, myLng, g.lat, g.lng);
-                    let affichageDist = distanceGis < 1 
-                        ? Math.round(distanceGis * 1000) + " m" 
-                        : distanceGis.toFixed(1) + " km";
+        function genererAffichageGisements(myLat, myLng) {
+            if (typeof REPERTOIRE_GISEMENTS === 'undefined' || !map) return;
 
-                    // Affichage sous forme de balise géométrique locale
-                    L.circleMarker([g.lat, g.lng], {
-                        radius: 8,
-                        color: '#1a1a2e',
-                        weight: 1,
-                        fillColor: '#b83b5e',
-                        fillOpacity: 0.9
-                    }).addTo(map)
-                      .bindPopup(`<b>${g.nom}</b><br><span style="color:#00f2fe;font-weight:bold;">Distance : ${affichageDist}</span><br><span style="font-size:11px;color:#ccc;">${g.details}</span>`);
-                });
-            }
-        }
+            const conteneurList = document.getElementById('listeGisements');
+            conteneurList.innerHTML = ''; // Vide l'ancien texte d'attente
 
-        function onLocationError(error) {
-            updateStatus('Recherche signal...', 'searching');
-        }
-    </script>
-</body>
-</html>
+            // Calcul des distances et injection dans un tableau temporaire
+            let gisementsAvecDistance = REPERTOIRE_GISEMENTS.map(g => {
+                return { ...g, distance: calculerDistance(myLat, myLng, g.lat, g.lng) };
+            });
+
+            // Tri mathématique du plus proche au plus lointain
+            gisementsAvecDistance.sort((a, b) => a.distance - b.distance);
+
+            // Boucle de rendu (génère à la fois le point sur le radar ET la ligne dans la liste)
+            gisementsAvecDistance.forEach(g => {
+                // Rendu 1 : Affichage de la ligne dans la liste textuelle en bas
+                const li = document.createElement('li');
+                li.className = 'gisement-item';
+                let affichageDist = g.distance < 1 
+                    ? Math.round(g.distance * 1000) + " m" 
+                    : g.distance.toFixed(1) + " km";
+
+                li.innerHTML = `
+                    <span class="gisement-dist">${affichageDist}</span>
+                    <div class="gisement-name">${g.nom}</div>
+                    <div class="gisement-desc">${g.details}</div>
+                `;
+                conteneurList.appendChild(li);
+
