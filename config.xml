@@ -1,39 +1,28 @@
 <?xml version='1.0' encoding='utf-8'?>
-<widget id="com.chasseurdegemmes.pro" version="1.1.0"
-        xmlns="http://www.w3.org/ns/widgets"
-        xmlns:cdv="http://cordova.apache.org/ns/1.0"
-        xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <name>Chasseur de Gemmes Pro</name>
-    <description>Application de détection géologique haute performance 100% hors-ligne.</description>
-    <author email="prospecteur@example.com">Chasseur de Gemmes</author>
-
+<widget id="com.gemmespro.app" version="1.0.0" xmlns="http://w3.org" xmlns:cdv="http://apache.org" xmlns:android="http://android.com">
+    <name>GemmesPro</name>
+    <description>Application de détection géologique par géolocalisation</description>
+    <author email="contact@gemmespro.com" href="https://gemmespro.com">Gemmes Pro Team</author>
+    
     <content src="index.html" />
-
     <access origin="*" />
     <allow-intent href="http://*/*" />
     <allow-intent href="https://*/*" />
 
-    <!-- Plugins essentiels -->
-    <plugin name="cordova-plugin-geolocation" spec="^5.0.0" />
-    <plugin name="cordova-plugin-android-permissions" spec="^1.0.0" />
-    <plugin name="cordova-plugin-background-mode-fixed" spec="^0.0.1" />
+    <preference name="LogLevel" value="DEBUG" />
+    <preference name="AndroidXEnabled" value="true" />
 
     <platform name="android">
-        <config-file target="AndroidManifest.xml" parent="/*">
-            <!-- Permissions de localisation -->
-            <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+        <allow-intent href="market:*" />
+        <preference name="android-minSdkVersion" value="22" />
+        <preference name="android-targetSdkVersion" value="34" />
+        
+        <config-file target="AndroidManifest.xml" parent="/manifest">
             <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-            <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
-            <!-- Permissions réseau et autres -->
-            <uses-permission android:name="android.permission.INTERNET" />
-            <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-            <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-            <uses-permission android:name="android.permission.WAKE_LOCK" />
-            <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-            <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+            <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
         </config-file>
     </platform>
 
-    <preference name="KeepRunning" value="true" />
+    <!-- Plugins requis pour faire tourner l'application de géolocalisation -->
+    <plugin name="cordova-plugin-geolocation" spec="^5.0.0" />
 </widget>
