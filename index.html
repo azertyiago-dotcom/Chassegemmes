@@ -117,7 +117,7 @@
         <div class="radar-sweep"></div>
     </div>
 
-    <div id="status" class="status-badge searching">Vérification des droits...</div>
+    <div id="status" class="status-badge searching">Initialisation...</div>
 
     <div class="mode-container">
         <button id="modeBtn" class="btn-mode" onclick="toggleMode()">Mode : Wi-Fi / Réseau</button>
@@ -152,43 +152,20 @@
         let useHighAccuracy = false;
 
         document.addEventListener('deviceready', () => {
-            checkPermissions();
+            startGeolocation();
         });
-
-        function checkPermissions() {
-            const permissions = cordova.plugins.permissions;
-            const list = [
-                permissions.ACCESS_FINE_LOCATION,
-                permissions.ACCESS_COARSE_LOCATION,
-                permissions.ACCESS_BACKGROUND_LOCATION
-            ];
-
-            permissions.hasPermission(list, (status) => {
-                if (status.hasPermission) {
-                    startGeolocation();
-                } else {
-                    permissions.requestPermissions(list, (status) => {
-                        if (status.hasPermission) {
-                            startGeolocation();
-                        } else {
-                            updateStatus('Permissions refusées', 'searching');
-                        }
-                    }, () => {
-                        updateStatus('Erreur demande permissions', 'searching');
-                    });
-                }
-            }, null);
-        }
 
         function startGeolocation() {
             updateStatus('Recherche de la position...', 'searching');
             if (watchId !== null) {
                 navigator.geolocation.clearWatch(watchId);
             }
+            
+            // Le plugin cordova-plugin-geolocation gère la demande de permission automatiquement ici
             watchId = navigator.geolocation.watchPosition(onSuccess, onError, {
                 enableHighAccuracy: useHighAccuracy,
-                maximumAge: 10000,
-                timeout: 10000
+                maximumAge: 5000,
+                timeout: 15000
             });
         }
 
@@ -202,7 +179,12 @@
         }
 
         function onError(error) {
-            updateStatus('Erreur localisation: ' + error.message, 'searching');
+            let msg = 'Erreur';
+            if (error.code === 1) msg = 'Permission refusée';
+            else if (error.code === 2) msg = 'Signal indisponible';
+            else if (error.code === 3) msg = 'Délai d\'attente dépassé';
+            
+            updateStatus(msg, 'searching');
         }
 
         function updateStatus(text, statusClass) {
