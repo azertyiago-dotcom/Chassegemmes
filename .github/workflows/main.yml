@@ -17,7 +17,7 @@ jobs:
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '17' # <-- CORRIGÉ : Repasse sous Java 17 pour valider les exigences de Gradle 9.8.0
+        java-version: '11' # <-- REPASSE EN JAVA 11 : Idéal pour Gradle 7.6 et Cordova 12
 
     - name: Configuration de NodeJS
       uses: actions/setup-node@v4
@@ -39,7 +39,8 @@ jobs:
     - name: Compilation de l'APK Final
       run: |
         cd appli_native
-        cordova build android --debug
+        # CORRIGÉ : On force l'utilisation de Gradle 7.6 pour éviter le crash de XmlParser de Gradle 9
+        CORDOVA_ANDROID_GRADLE_VERSION="7.6" cordova build android --debug
         
     - name: Livraison du fichier APK
       uses: actions/upload-artifact@v4
