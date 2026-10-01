@@ -17,7 +17,7 @@ jobs:
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '11'
+        java-version: '17' # <-- CORRIGÉ : Repasse sous Java 17 pour valider les exigences de Gradle 9.8.0
 
     - name: Configuration de NodeJS
       uses: actions/setup-node@v4
@@ -34,7 +34,6 @@ jobs:
         cp index.html appli_native/www/index.html
         cd appli_native
         cordova platform add android@12.0.0
-        # CORRIGÉ : Utilisation du fork nettoyé et compatible Android 12 sans l'erreur windows-sdk
         cordova plugin add cordova-plugin-background-mode-fixed
         
     - name: Compilation de l'APK Final
