@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Chasseur de Gemmes Pro</title>
+    <title>Gemmes Pro - Prospection</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -13,23 +13,14 @@
             background-color: #1a1a2e;
             color: #e2e2e2;
         }
-        h1 {
-            color: #00f2fe;
-            margin-bottom: 5px;
-            text-transform: uppercase;
-            font-size: 24px;
-        }
-        .subtitle {
-            color: #4facfe;
-            margin-top: 0;
-            font-size: 14px;
-            margin-bottom: 25px;
-        }
+        h1 { color: #00f2fe; margin-bottom: 5px; text-transform: uppercase; font-size: 24px; }
+        .subtitle { color: #4facfe; margin-top: 0; font-size: 14px; margin-bottom: 25px; }
+        
         .radar-container {
             position: relative;
-            width: 160px;
-            height: 160px;
-            margin: 0 auto 25px auto;
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 15px auto;
             border: 4px solid #4facfe;
             border-radius: 50%;
             background: radial-gradient(circle, #162447 20%, #1a1a2e 80%);
@@ -49,30 +40,6 @@
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
-        .geo-box {
-            background-color: #162447;
-            border: 1px solid #4facfe;
-            border-radius: 10px;
-            padding: 15px;
-            margin: 15px auto;
-            max-width: 320px;
-            text-align: left;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-        }
-        .geo-line {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-            font-size: 16px;
-            border-bottom: 1px solid rgba(79, 172, 254, 0.2);
-            padding-bottom: 5px;
-        }
-        .geo-line:last-child {
-            border-bottom: none;
-            margin-bottom: 0;
-        }
-        .label { color: #84a9ac; font-weight: bold; }
-        .value { color: #00f2fe; font-family: monospace; font-size: 17px; }
 
         .status-badge {
             display: inline-block;
@@ -85,75 +52,108 @@
         .searching { background-color: #b83b5e; color: #fff; }
         .active { background-color: #00b16a; color: #fff; }
 
-        .mode-container {
-            margin-top: 10px;
-            margin-bottom: 20px;
+        /* Module de filtrage par rayon */
+        .filter-box {
+            background: #1f4068;
+            margin: 10px auto;
+            padding: 10px;
+            max-width: 340px;
+            border-radius: 8px;
+            border: 1px solid #4facfe;
         }
-        .btn-mode {
-            background-color: #1f4068;
-            color: white;
-            border: 2px solid #4facfe;
-            padding: 10px 20px;
-            font-size: 14px;
+        select {
+            background: #162447;
+            color: #00f2fe;
+            border: 1px solid #4facfe;
+            padding: 5px;
+            border-radius: 4px;
             font-weight: bold;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: all 0.3s ease;
         }
-        .btn-mode.gps-active {
-            background-color: #00f2fe;
-            color: #1a1a2e;
-            border-color: #fff;
-            box-shadow: 0 0 15px rgba(0, 242, 254, 0.6);
+
+        .geo-box {
+            background-color: #162447;
+            border: 1px solid #4facfe;
+            border-radius: 10px;
+            padding: 12px;
+            margin: 15px auto;
+            max-width: 340px;
+            text-align: left;
         }
+        .geo-line {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+        .label { color: #84a9ac; }
+        .value { color: #00f2fe; font-family: monospace; }
+
+        .gisement-title {
+            margin-top: 20px;
+            text-align: left;
+            max-width: 340px;
+            margin-left: auto;
+            margin-right: auto;
+            color: #4facfe;
+            font-weight: bold;
+        }
+        .gisements-list {
+            max-width: 340px;
+            margin: 10px auto;
+            padding: 0;
+            list-style: none;
+        }
+        .gisement-item {
+            background: #162447;
+            border-left: 5px solid #00f2fe;
+            margin-bottom: 8px;
+            padding: 12px;
+            border-radius: 0 6px 6px 0;
+            text-align: left;
+        }
+        .gisement-name { font-weight: bold; color: #fff; }
+        .gisement-dist { float: right; color: #00f2fe; font-weight: bold; font-family: monospace; }
+        .gisement-desc { font-size: 12px; color: #84a9ac; margin-top: 4px; }
     </style>
 </head>
 <body>
 
     <h1>Gemmes Pro</h1>
-    <p class="subtitle">Détection Géologique &amp; Hors-Ligne</p>
+    <p class="subtitle">Analyseur de Données Terrains du Net</p>
 
     <div class="radar-container">
         <div class="radar-sweep"></div>
     </div>
 
-    <div id="status" class="status-badge searching">Interface prête...</div>
+    <div id="status" class="status-badge searching">Calibrage GPS...</div>
 
-    <div class="mode-container">
-        <button id="modeBtn" class="btn-mode" onclick="toggleMode()">Mode : Wi-Fi / Réseau</button>
+    <div class="filter-box">
+        <label>Rayon de détection : </label>
+        <select id="rayonSelect" onchange="relancerCalcul()">
+            <option value="50">50 km</option>
+            <option value="100" selected>100 km</option>
+            <option value="500">500 km</option>
+            <option value="9999">Tout afficher</option>
+        </select>
     </div>
 
     <div class="geo-box">
-        <div class="geo-line">
-            <span class="label">Source du signal :</span>
-            <span id="signalSource" class="value" style="color: #4facfe;">Recherche...</span>
-        </div>
-        <div class="geo-line">
-            <span class="label">Latitude :</span>
-            <span id="lat" class="value">--</span>
-        </div>
-        <div class="geo-line">
-            <span class="label">Longitude :</span>
-            <span id="lng" class="value">--</span>
-        </div>
-        <div class="geo-line">
-            <span class="label">Altitude :</span>
-            <span id="alt" class="value">--</span>
-        </div>
-        <div class="geo-line">
-            <span class="label">Précision :</span>
-            <span id="acc" class="value">--</span>
-        </div>
+        <div class="geo-line"><span class="label">Ma Position :</span><span id="coordsAffichage" class="value">--</span></div>
+        <div class="geo-line"><span class="label">Précision :</span><span id="acc" class="value">--</span></div>
     </div>
 
-    <!-- Le script cordova.js est déplacé tout en bas pour ne pas bloquer le chargement initial de la page -->
+    <div class="gisement-title">💎 Gisements Référencés Trouvés</div>
+    <ul id="listeGisements" class="gisements-list">
+        <li style="text-align: center; color: #84a9ac;">Calcul de proximité en cours...</li>
+    </ul>
+
+    <!-- IMPORTANT : Chargement de la base réseau locale puis de Cordova -->
+    <script src="gisements.js"></script>
     <script src="cordova.js"></script>
-    
     <script>
         let watchId = null;
-        let useHighAccuracy = false;
+        let maPositionActuelle = null;
 
-        // Fonction pour changer le texte à l'écran de manière sécurisée
         function updateStatus(text, statusClass) {
             const statusEl = document.getElementById('status');
             if (statusEl) {
@@ -162,80 +162,85 @@
             }
         }
 
-        // Démarrage propre après le chargement complet des composants Web
         window.addEventListener('DOMContentLoaded', () => {
-            updateStatus('Initialisation du système...', 'searching');
-            
-            // Attente de l'événement natif de l'application
             document.addEventListener('deviceready', () => {
-                updateStatus('Connexion capteurs réussie', 'searching');
-                // Lancement léger avec un léger délai pour laisser Android respirer
-                setTimeout(startGeolocation, 1000);
+                updateStatus('Modems GPS synchronisés', 'searching');
+                startGeolocation();
             }, false);
-
-            // Secours si le conteneur natif met trop de temps (ex: tablettes plus anciennes)
-            setTimeout(() => {
-                const statusEl = document.getElementById('status');
-                if (statusEl && statusEl.textContent === 'Initialisation du système...') {
-                    updateStatus('Mode secours activé', 'searching');
-                    startGeolocation();
-                }
-            }, 3000);
         });
 
         function startGeolocation() {
-            if (watchId !== null) {
-                navigator.geolocation.clearWatch(watchId);
-            }
-
-            updateStatus('Recherche position...', 'searching');
-
-            if (!navigator.geolocation) {
-                updateStatus('Capteur introuvable', 'searching');
-                return;
-            }
-
-            // Options configurées pour s'adapter à la fois au Wi-Fi et au GPS matériel
-            const options = {
-                enableHighAccuracy: useHighAccuracy,
-                maximumAge: 0, 
+            if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+            watchId = navigator.geolocation.watchPosition(onSuccess, handleGeoError, {
+                enableHighAccuracy: true, // Force l'usage des puces GPS matérielles
+                maximumAge: 0,
                 timeout: 10000
-            };
-
-            watchId = navigator.geolocation.watchPosition(onSuccess, handleGeoError, options);
+            });
         }
 
         function onSuccess(position) {
-            updateStatus('Signal en ligne', 'active');
-            document.getElementById('lat').textContent = position.coords.latitude.toFixed(6);
-            document.getElementById('lng').textContent = position.coords.longitude.toFixed(6);
-            document.getElementById('alt').textContent = position.coords.altitude !== null ? position.coords.altitude.toFixed(2) + ' m' : '--';
-            document.getElementById('acc').textContent = position.coords.accuracy.toFixed(2) + ' m';
-            document.getElementById('signalSource').textContent = useHighAccuracy ? 'GPS Matériel' : 'Wi-Fi / Antenne';
+            updateStatus('GPS Actif', 'active');
+            const myLat = position.coords.latitude;
+            const myLng = position.coords.longitude;
+            maPositionActuelle = { lat: myLat, lng: myLng };
+
+            document.getElementById('coordsAffichage').textContent = myLat.toFixed(4) + " , " + myLng.toFixed(4);
+            document.getElementById('acc').textContent = position.coords.accuracy.toFixed(1) + ' m';
+
+            traiterGisements(myLat, myLng);
+        }
+
+        function calculerDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Rayon de la Terre en km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+        }
+
+        function traiterGisements(myLat, myLng) {
+            const rayonMax = parseFloat(document.getElementById('rayonSelect').value);
+            const conteneur = document.getElementById('listeGisements');
+            conteneur.innerHTML = '';
+
+            // Association des distances calculées
+            let resultats = REPERTOIRE_GISEMENTS.map(g => {
+                return { ...g, distance: calculerDistance(myLat, myLng, g.lat, g.lng) };
+            });
+
+            // Filtrage par distance et tri du plus proche au plus loin
+            let filtres = resultats.filter(g => g.distance <= rayonMax);
+            filtres.sort((a, b) => a.distance - b.distance);
+
+            if (filtres.length === 0) {
+                conteneur.innerHTML = `<li style='text-align:center;color:#b83b5e;padding:10px;'>Aucun gisement répertorié dans un rayon de ${rayonMax} km.</li>`;
+                return;
+            }
+
+            filtres.forEach(g => {
+                const li = document.createElement('li');
+                li.className = 'gisement-item';
+                let affichageDist = g.distance.toFixed(1) + " km";
+                
+                li.innerHTML = `
+                    <span class="gisement-dist">${affichageDist}</span>
+                    <div class="gisement-name">${g.nom}</div>
+                    <div class="gisement-desc">${g.details}</div>
+                `;
+                conteneur.appendChild(li);
+            });
+        }
+
+        function relancerCalcul() {
+            if (maPositionActuelle) {
+                traiterGisements(maPositionActuelle.lat, maPositionActuelle.lng);
+            }
         }
 
         function handleGeoError(error) {
-            let msg = 'Erreur position';
-            if (error.code === 1) {
-                msg = 'Veuillez accepter les droits';
-            } else if (error.code === 2) {
-                msg = 'Signal faible / Activez le GPS';
-            } else if (error.code === 3) {
-                msg = 'Délai dépassé (Recherche...)';
-                // En cas de coupure de signal, relance douce automatique
-                setTimeout(startGeolocation, 3000);
-            }
-            updateStatus(msg, 'searching');
-        }
-
-        function toggleMode() {
-            useHighAccuracy = !useHighAccuracy;
-            const btn = document.getElementById('modeBtn');
-            if (btn) {
-                btn.classList.toggle('gps-active', useHighAccuracy);
-                btn.textContent = 'Mode : ' + (useHighAccuracy ? 'GPS (Précis)' : 'Wi-Fi / Réseau');
-            }
-            startGeolocation();
+            updateStatus('Signal satellite perdu', 'searching');
         }
     </script>
 </body>
