@@ -3,12 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-    <title>Gemmes Pro - Cartographie</title>
-    
-    <!-- Liens d'importations stables de la carte Leaflet -->
-    <link rel="stylesheet" href="https://cloudflare.com" />
-    <script src="https://cloudflare.com"></script>
-
+    <title>Gemmes Pro - Prospection Mobile</title>
     <style>
         html, body {
             margin: 0;
@@ -19,35 +14,35 @@
             color: #e2e2e2;
             overflow: hidden;
         }
-
         #main-container {
             display: flex;
             flex-direction: column;
             height: 100%;
         }
-
+        /* Zone d'attente locale sans crash */
         #map {
             flex: 1;
             width: 100%;
             z-index: 1;
+            background-color: #111b30;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #84a9ac;
         }
-
         .panel-inférieur {
             background-color: #162447;
             border-top: 3px solid #4facfe;
             padding: 12px 20px;
-            box-shadow: 0 -4px 15px rgba(0,0,0,0.4);
             z-index: 10;
         }
-
         h1 {
             color: #00f2fe;
             margin: 0 0 4px 0;
             text-transform: uppercase;
             font-size: 18px;
-            letter-spacing: 1px;
         }
-
         .status-badge {
             display: inline-block;
             padding: 4px 10px;
@@ -59,7 +54,6 @@
         }
         .searching { background-color: #b83b5e; color: #fff; }
         .active { background-color: #00b16a; color: #fff; }
-
         .geo-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -68,56 +62,22 @@
             background: #1f4068;
             padding: 8px;
             border-radius: 6px;
-            border: 1px solid rgba(79, 172, 254, 0.3);
         }
-        .geo-item {
-            font-family: monospace;
-            color: #00f2fe;
-        }
-        .geo-item span {
-            color: #84a9ac;
-            font-family: sans-serif;
-            margin-right: 4px;
-        }
-
-        .btn-recenter {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background-color: #162447;
-            color: #00f2fe;
-            border: 2px solid #4facfe;
-            padding: 10px;
-            border-radius: 50%;
-            width: 44px;
-            height: 44px;
-            font-weight: bold;
-            font-size: 18px;
-            cursor: pointer;
-            z-index: 999;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .btn-recenter:active {
-            background-color: #4facfe;
-            color: #162447;
-        }
+        .geo-item { font-family: monospace; color: #00f2fe; }
+        .geo-item span { color: #84a9ac; font-family: sans-serif; }
     </style>
 </head>
 <body>
 
     <div id="main-container">
-        <button class="btn-recenter" onclick="recenterMap()" title="Recentrer">🎯</button>
-        <div id="map"></div>
+        <!-- Message initial écrit en brut pour vérifier que l'écran ne gèle pas -->
+        <div id="map">Chargement des modules cartographiques...</div>
 
         <div class="panel-inférieur">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <h1>Gemmes Pro Maps</h1>
-                <div id="status" class="status-badge searching">Initialisation...</div>
+                <div id="status" class="status-badge searching">Vérification Permissions...</div>
             </div>
-            
             <div class="geo-grid">
                 <div class="geo-item"><span>GPS:</span><span id="coordsAffichage">Recherche...</span></div>
                 <div class="geo-item" style="text-align: right;"><span>Précision:</span><span id="acc">--</span></div>
@@ -125,144 +85,103 @@
         </div>
     </div>
 
+    <!-- Chargement impératif de la base locale en premier -->
     <script src="gisements.js"></script>
     <script src="cordova.js"></script>
+    
     <script>
-        let watchId = null;
         let map = null;
         let userMarker = null;
-        let userCircle = null;
-        let gisementsMarqueurs = [];
-        let maDernierePosition = null;
+        let isMapLoaded = false;
 
         function updateStatus(text, statusClass) {
-            const statusEl = document.getElementById('status');
-            if (statusEl) {
-                statusEl.textContent = text;
-                statusEl.className = 'status-badge ' + statusClass;
-            }
+            document.getElementById('status').textContent = text;
+            document.getElementById('status').className = 'status-badge ' + statusClass;
         }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            // Initialisation de la vue par défaut centrée sur la France
-            map = L.map('map', { zoomControl: false }).setView([46.6033, 1.8883], 6);
-            L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '© OpenStreetMap'
-            }).addTo(map);
-
-            document.addEventListener('deviceready', () => {
-                updateStatus('Calcul du premier Fix...', 'searching');
-                reveillerEtLancerGPS();
-            }, false);
-        });
-
-        // TECHNIQUE DE SÉCURITÉ CRITIQUE : Réveil forcé des capteurs
-        function reveillerEtLancerGPS() {
-            if (!navigator.geolocation) {
-                updateStatus('Capteur absent', 'searching');
-                return;
-            }
-
-            // Options ultra-permissives pour forcer le matériel Android à répondre
-            const bootstrapOptions = {
-                enableHighAccuracy: false, // On commence sans forcer le satellite pur pour éviter le gel
-                timeout: 4000,
-                maximumAge: 0
-            };
-
-            // Étape 1 : Appel unique pour débloquer le cache WebView
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    console.log("Capteur réveillé avec succès via réseau.");
-                    onSuccess(pos);
-                    lancerSuiviContinu(); // Étape 2 : Lancement du suivi régulier
-                },
-                (err) => {
-                    console.log("Échec du réveil réseau. Tentative de forçage direct...");
-                    lancerSuiviContinu(); // Secours : On force quand même le suivi si le réseau échoue
-                },
-                bootstrapOptions
-            );
-        }
-
-        function lancerSuiviContinu() {
-            if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-
-            const options = {
-                enableHighAccuracy: true, // Repasse en haute précision pour la prospection sur le terrain
-                maximumAge: 0, 
-                timeout: 10000 // Laisse 10 secondes aux satellites à chaque itération
-            };
-
-            watchId = navigator.geolocation.watchPosition(onSuccess, handleGeoError, options);
-        }
-
-        function onSuccess(position) {
-            updateStatus('GPS Actif', 'active');
+        // On écoute le signal natif Cordova pour démarrer les capteurs
+        document.addEventListener('deviceready', () => {
+            updateStatus('Capteurs OK - Fix GPS...', 'searching');
             
-            const myLat = position.coords.latitude;
-            const myLng = position.coords.longitude;
-            const accuracy = position.coords.accuracy;
-            maDernierePosition = [myLat, myLng];
+            // Lancement immédiat du capteur avec tolérance maximale pour déclencher la pop-up de droits Android
+            navigator.geolocation.getCurrentPosition(onFirstFixSuccess, onFirstFixError, {
+                enableHighAccuracy: false, // Évite le gel satellite intérieur au premier démarrage
+                timeout: 8000,
+                maximumAge: 60000 // Accepte une position en cache si existante
+            });
+        }, false);
 
-            document.getElementById('coordsAffichage').textContent = myLat.toFixed(4) + " , " + myLng.toFixed(4);
-            document.getElementById('acc').textContent = accuracy.toFixed(0) + ' m';
+        function onFirstFixSuccess(position) {
+            updateStatus('Signal validé', 'active');
+            injecterLibrairieCartographique(position);
+        }
 
-            if (!userMarker) {
-                userMarker = L.marker([myLat, myLng]).addTo(map)
-                    .bindPopup("<b>Votre position de fouille</b>").openPopup();
+        function onFirstFixError(error) {
+            console.log("Erreur de premier fix, forçage des cartes quand même.");
+            // Secours : si le GPS stagne (ex: en intérieur), on simule une position sur Bordeaux pour forcer l'affichage
+            const simulationAquitaine = {
+                coords: { latitude: 44.8377, longitude: -0.5791, accuracy: 999 }
+            };
+            injecterLibrairieCartographique(simulationAquitaine);
+        }
+
+        // INJECTION DYNAMIQUE APRÈS RÉSOLUTION DU GPS POUR ÉVITER LE CRASH WEBVIEW
+        function injecterLibrairieCartographique(initialPosition) {
+            if (isMapLoaded) return;
+            isMapLoaded = true;
+
+            document.getElementById('map').innerHTML = ""; // Vide le texte de chargement
+
+            // Chargement CSS Leaflet
+            let leafletCss = document.createElement('link');
+            leafletCss.rel = 'stylesheet';
+            leafletCss.href = 'https://cloudflare.com';
+            document.head.appendChild(leafletCss);
+
+            // Chargement JS Leaflet
+            let leafletJs = document.createElement('script');
+            leafletJs.src = 'https://cloudflare.com';
+            leafletJs.onload = function() {
+                // Initialisation de la carte une fois le fichier JS téléchargé en mémoire
+                map = L.map('map', { zoomControl: true }).setView([initialPosition.coords.latitude, initialPosition.coords.longitude], 12);
                 
-                userCircle = L.circle([myLat, myLng], {
-                    radius: accuracy,
-                    color: '#00f2fe',
-                    fillColor: '#4facfe',
-                    fillOpacity: 0.15
-                }).addTo(map);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-                map.setView([myLat, myLng], 13);
+                // Traitement de la position
+                rafraichirPositionEcran(initialPosition);
                 chargerMarqueursGisements();
-            } else {
-                userMarker.setLatLng([myLat, myLng]);
-                userCircle.setLatLng([myLat, myLng]);
-                userCircle.setRadius(accuracy);
+
+                // Lancement de l'écoute continue sur le terrain
+                navigator.geolocation.watchPosition(rafraichirPositionEcran, () => {}, {
+                    enableHighAccuracy: true,
+                    maximumAge: 0
+                });
+            };
+            document.head.appendChild(leafletJs);
+        }
+
+        function rafraichirPositionEcran(position) {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            
+            document.getElementById('coordsAffichage').textContent = lat.toFixed(4) + " , " + lng.toFixed(4);
+            document.getElementById('acc').textContent = position.coords.accuracy.toFixed(0) + ' m';
+
+            if (map) {
+                if (!userMarker) {
+                    userMarker = L.marker([lat, lng]).addTo(map).bindPopup("Vous êtes ici").openPopup();
+                } else {
+                    userMarker.setLatLng([lat, lng]);
+                }
             }
         }
 
         function chargerMarqueursGisements() {
-            gisementsMarqueurs.forEach(m => map.removeLayer(m));
-            gisementsMarqueurs = [];
-
-            const gemIcon = L.icon({
-                iconUrl: 'https://cloudflare.com',
-                shadowUrl: 'https://cloudflare.com',
-                iconSize: [25, 41],
-                iconAnchor: [12, 41],
-                popupAnchor: [1, -34],
-                shadowSize: [41, 41]
-            });
-
-            if (typeof REPERTOIRE_GISEMENTS !== 'undefined') {
+            if (typeof REPERTOIRE_GISEMENTS !== 'undefined' && map) {
                 REPERTOIRE_GISEMENTS.forEach(g => {
-                    const marker = L.marker([g.lat, g.lng], { icon: gemIcon }).addTo(map)
-                        .bindPopup(`<b>${g.nom}</b><br><span style="font-size:12px;color:#555;">${g.details}</span>`);
-                    gisementsMarqueurs.push(marker);
+                    L.marker([g.lat, g.lng]).addTo(map)
+                        .bindPopup(`<b>${g.nom}</b><br><span style="font-size:11px;color:#666;">${g.details}</span>`);
                 });
-            }
-        }
-
-        function handleGeoError(error) {
-            console.log("Erreur de suivi GPS. Code: " + error.code);
-            // Si le signal satellite pur est perdu, on maintient l'affichage mais on repasse en recherche active
-            updateStatus('Recherche signal...', 'searching');
-        }
-
-        function recenterMap() {
-            if (maDernierePosition && map) {
-                map.setView(maDernierePosition, 14);
-                if (userMarker) userMarker.openPopup();
             }
         }
     </script>
