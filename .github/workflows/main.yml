@@ -24,8 +24,11 @@ jobs:
       with:
         gradle-version: '7.6'
 
+    # CORRECTION ICI : On force l'utilisation de Java 17 fourni par défaut sur la machine uniquement pour l'étape du sdkmanager
     - name: Installation des Android Build Tools et SDK 33
       run: |
+        export JAVA_HOME=$JAVA_HOME_17_X64
+        export PATH=$JAVA_HOME/bin:$PATH
         echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;33.0.2" "platforms;android-33"
 
     - name: Configuration de NodeJS
@@ -64,7 +67,6 @@ jobs:
           cp -r img appli_native/www/ 2>/dev/null || true
         fi
         
-        # Vérification dans les logs que index.html et gisements.js sont présents au bon endroit
         echo "=== VÉRIFICATION DU DOSSIER WWW AVANT COMPILATION ==="
         ls -la appli_native/www/
         
