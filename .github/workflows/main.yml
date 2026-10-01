@@ -38,37 +38,44 @@ jobs:
 
     - name: Structure des dossiers et création du projet natif Android
       run: |
+        # Création propre du dossier www si absent
         if [ ! -d "www" ]; then
-          mkdir www
-          cp index.html www/ 2>/dev/null || true
+          mkdir -p www
+          if [ -f "index.html" ]; then
+            cp index.html www/
+          fi
         fi
         
+        # Nettoyage préventif d'un ancien dossier
+        rm -rf appli_native
+        
+        # Création et bascule forcée dans le dossier Cordova
         cordova create appli_native com.chasseurdegemmes.pro "GemmesPro"
         cp config.xml appli_native/config.xml
         cp -r www/* appli_native/www/
         
         cd appli_native
-        cordova platform add android@12.0.0
+        # On force l'ajout et on vérifie qu'il se crée bien
+        cordova platform add android@12.0.0 --verbose
 
     - name: Installation du plugin Cordova Géolocalisation Officiel
       run: |
         cd appli_native
-        cordova plugin add cordova-plugin-geolocation@^5.0.0
+        cordova plugin add cordova-plugin-geolocation@^5.0.0 --verbose
 
     - name: Compilation de l'APK Final
       run: |
         cd appli_native
-        cordova build android --debug
+        cordova build android --debug --verbose
 
-    # NOUVELLE ÉTAPE CRITIQUE : Extrait l'APK du sous-dossier et le met à la racine
     - name: Extraction de l'APK vers la racine
       run: |
         mkdir -p output_apk
-        find appli_native/platforms/android/ -name "*.apk" -exec cp {} output_apk/ \;
-        echo "Fichiers copiés dans output_apk :"
+        # Recherche large à partir de la racine pour ne rien rater
+        find . -name "*.apk" -exec cp {} output_apk/ \;
+        echo "Contenu du dossier de sortie :"
         ls -la output_apk/
 
-    # Livraison ciblée et garantie
     - name: Livraison du fichier APK
       uses: actions/upload-artifact@v4
       with:
