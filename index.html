@@ -2,157 +2,115 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Gemmes Pro - Prospection</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Gemmes Pro - Cartographie</title>
+    
+    <!-- Inclusion des feuilles de style et scripts de la carte Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            text-align: center;
+        html, body {
             margin: 0;
-            padding: 20px;
+            padding: 0;
+            height: 100%;
             background-color: #1a1a2e;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: #e2e2e2;
-        }
-        h1 { color: #00f2fe; margin-bottom: 5px; text-transform: uppercase; font-size: 24px; }
-        .subtitle { color: #4facfe; margin-top: 0; font-size: 14px; margin-bottom: 25px; }
-        
-        .radar-container {
-            position: relative;
-            width: 100px;
-            height: 100px;
-            margin: 0 auto 15px auto;
-            border: 4px solid #4facfe;
-            border-radius: 50%;
-            background: radial-gradient(circle, #162447 20%, #1a1a2e 80%);
-            box-shadow: 0 0 20px rgba(79, 172, 254, 0.4);
             overflow: hidden;
         }
-        .radar-sweep {
-            position: absolute;
-            width: 100%;
+
+        /* Interface globale scindée en deux : Carte en haut, données en bas */
+        #main-container {
+            display: flex;
+            flex-direction: column;
             height: 100%;
-            background: linear-gradient(45deg, rgba(0,242,254,0.4) 0%, rgba(0,0,0,0) 50%);
-            transform-origin: center;
-            border-radius: 50%;
-            animation: radar-beam 3s linear infinite;
         }
-        @keyframes radar-beam {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+
+        #map {
+            flex: 1;
+            width: 100%;
+            z-index: 1;
+        }
+
+        .panel-inférieur {
+            background-color: #162447;
+            border-top: 3px solid #4facfe;
+            padding: 12px 20px;
+            box-shadow: 0 -4px 15px rgba(0,0,0,0.4);
+            z-index: 10;
+        }
+
+        h1 {
+            color: #00f2fe;
+            margin: 0 0 4px 0;
+            text-transform: uppercase;
+            font-size: 18px;
+            letter-spacing: 1px;
         }
 
         .status-badge {
             display: inline-block;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 13px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
             font-weight: bold;
-            margin-bottom: 15px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
         }
         .searching { background-color: #b83b5e; color: #fff; }
         .active { background-color: #00b16a; color: #fff; }
 
-        /* Module de filtrage par rayon */
-        .filter-box {
+        .geo-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            font-size: 13px;
             background: #1f4068;
-            margin: 10px auto;
-            padding: 10px;
-            max-width: 340px;
-            border-radius: 8px;
-            border: 1px solid #4facfe;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(79, 172, 254, 0.3);
         }
-        select {
-            background: #162447;
+        .geo-item {
+            font-family: monospace;
             color: #00f2fe;
-            border: 1px solid #4facfe;
-            padding: 5px;
-            border-radius: 4px;
-            font-weight: bold;
         }
-
-        .geo-box {
-            background-color: #162447;
-            border: 1px solid #4facfe;
-            border-radius: 10px;
-            padding: 12px;
-            margin: 15px auto;
-            max-width: 340px;
-            text-align: left;
+        .geo-item span {
+            color: #84a9ac;
+            font-family: sans-serif;
+            margin-right: 4px;
         }
-        .geo-line {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 6px;
-            font-size: 14px;
-        }
-        .label { color: #84a9ac; }
-        .value { color: #00f2fe; font-family: monospace; }
-
-        .gisement-title {
-            margin-top: 20px;
-            text-align: left;
-            max-width: 340px;
-            margin-left: auto;
-            margin-right: auto;
-            color: #4facfe;
-            font-weight: bold;
-        }
-        .gisements-list {
-            max-width: 340px;
-            margin: 10px auto;
-            padding: 0;
-            list-style: none;
-        }
-        .gisement-item {
-            background: #162447;
-            border-left: 5px solid #00f2fe;
-            margin-bottom: 8px;
-            padding: 12px;
-            border-radius: 0 6px 6px 0;
-            text-align: left;
-        }
-        .gisement-name { font-weight: bold; color: #fff; }
-        .gisement-dist { float: right; color: #00f2fe; font-weight: bold; font-family: monospace; }
-        .gisement-desc { font-size: 12px; color: #84a9ac; margin-top: 4px; }
     </style>
 </head>
 <body>
 
-    <h1>Gemmes Pro</h1>
-    <p class="subtitle">Analyseur de Données Terrains du Net</p>
+    <div id="main-container">
+        <!-- Zone d'affichage de la carte interactive -->
+        <div id="map"></div>
 
-    <div class="radar-container">
-        <div class="radar-sweep"></div>
+        <!-- Tableau de bord inférieur -->
+        <div class="panel-inférieur">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h1>Gemmes Pro Maps</h1>
+                <div id="status" class="status-badge searching">Fix Satellites...</div>
+            </div>
+            
+            <div class="geo-grid">
+                <div class="geo-item"><span>GPS:</span><span id="coordsAffichage">En attente...</span></div>
+                <div class="geo-item" style="text-align: right;"><span>Précision:</span><span id="acc">--</span></div>
+            </div>
+        </div>
     </div>
 
-    <div id="status" class="status-badge searching">Calibrage GPS...</div>
-
-    <div class="filter-box">
-        <label>Rayon de détection : </label>
-        <select id="rayonSelect" onchange="relancerCalcul()">
-            <option value="50">50 km</option>
-            <option value="100" selected>100 km</option>
-            <option value="500">500 km</option>
-            <option value="9999">Tout afficher</option>
-        </select>
-    </div>
-
-    <div class="geo-box">
-        <div class="geo-line"><span class="label">Ma Position :</span><span id="coordsAffichage" class="value">--</span></div>
-        <div class="geo-line"><span class="label">Précision :</span><span id="acc" class="value">--</span></div>
-    </div>
-
-    <div class="gisement-title">💎 Gisements Référencés Trouvés</div>
-    <ul id="listeGisements" class="gisements-list">
-        <li style="text-align: center; color: #84a9ac;">Calcul de proximité en cours...</li>
-    </ul>
-
-    <!-- IMPORTANT : Chargement de la base réseau locale puis de Cordova -->
+    <!-- Chargement des scripts de votre architecture mobile -->
     <script src="gisements.js"></script>
     <script src="cordova.js"></script>
     <script>
         let watchId = null;
-        let maPositionActuelle = null;
+        let map = null;
+        let userMarker = null;
+        let userCircle = null;
+        let gisementsMarqueurs = [];
 
         function updateStatus(text, statusClass) {
             const statusEl = document.getElementById('status');
@@ -163,8 +121,23 @@
         }
 
         window.addEventListener('DOMContentLoaded', () => {
+            // 1. Initialisation par défaut de la carte centrée sur la France
+            map = L.map('map', {
+                zoomControl: false // Désactivé pour épurer l'interface mobile
+            }).setView([46.6033, 1.8883], 6);
+
+            // Ajout des boutons de zoom en bas à droite pour une meilleure ergonomie tactile
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+            // Chargement des tuiles OpenStreetMap cartographiques gratuites
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap'
+            }).addTo(map);
+
+            // 2. Lancement des capteurs Cordova natifs
             document.addEventListener('deviceready', () => {
-                updateStatus('Modems GPS synchronisés', 'searching');
+                updateStatus('Radar Synchro', 'searching');
                 startGeolocation();
             }, false);
         });
@@ -172,75 +145,72 @@
         function startGeolocation() {
             if (watchId !== null) navigator.geolocation.clearWatch(watchId);
             watchId = navigator.geolocation.watchPosition(onSuccess, handleGeoError, {
-                enableHighAccuracy: true, // Force l'usage des puces GPS matérielles
+                enableHighAccuracy: true,
                 maximumAge: 0,
                 timeout: 10000
             });
         }
 
         function onSuccess(position) {
-            updateStatus('GPS Actif', 'active');
+            updateStatus('Carte Active', 'active');
             const myLat = position.coords.latitude;
             const myLng = position.coords.longitude;
-            maPositionActuelle = { lat: myLat, lng: myLng };
+            const accuracy = position.coords.accuracy;
 
             document.getElementById('coordsAffichage').textContent = myLat.toFixed(4) + " , " + myLng.toFixed(4);
-            document.getElementById('acc').textContent = position.coords.accuracy.toFixed(1) + ' m';
+            document.getElementById('acc').textContent = accuracy.toFixed(0) + ' m';
 
-            traiterGisements(myLat, myLng);
-        }
-
-        function calculerDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371; // Rayon de la Terre en km
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-                      Math.sin(dLon/2) * Math.sin(dLon/2);
-            return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
-        }
-
-        function traiterGisements(myLat, myLng) {
-            const rayonMax = parseFloat(document.getElementById('rayonSelect').value);
-            const conteneur = document.getElementById('listeGisements');
-            conteneur.innerHTML = '';
-
-            // Association des distances calculées
-            let resultats = REPERTOIRE_GISEMENTS.map(g => {
-                return { ...g, distance: calculerDistance(myLat, myLng, g.lat, g.lng) };
-            });
-
-            // Filtrage par distance et tri du plus proche au plus loin
-            let filtres = resultats.filter(g => g.distance <= rayonMax);
-            filtres.sort((a, b) => a.distance - b.distance);
-
-            if (filtres.length === 0) {
-                conteneur.innerHTML = `<li style='text-align:center;color:#b83b5e;padding:10px;'>Aucun gisement répertorié dans un rayon de ${rayonMax} km.</li>`;
-                return;
-            }
-
-            filtres.forEach(g => {
-                const li = document.createElement('li');
-                li.className = 'gisement-item';
-                let affichageDist = g.distance.toFixed(1) + " km";
+            // 3. Gestion de la position utilisateur sur la carte
+            if (!userMarker) {
+                // Premier point trouvé : on crée le marqueur bleu et on centre la carte
+                userMarker = L.marker([myLat, myLng]).addTo(map)
+                    .bindPopup("<b>Votre position de prospection</b>").openPopup();
                 
-                li.innerHTML = `
-                    <span class="gisement-dist">${affichageDist}</span>
-                    <div class="gisement-name">${g.nom}</div>
-                    <div class="gisement-desc">${g.details}</div>
-                `;
-                conteneur.appendChild(li);
-            });
+                userCircle = L.circle([myLat, myLng], {
+                    radius: accuracy,
+                    color: '#00f2fe',
+                    fillColor: '#4facfe',
+                    fillOpacity: 0.15
+                }).addTo(map);
+
+                // Zoom automatique serré autour de votre position réelle
+                map.setView([myLat, myLng], 13);
+                
+                // Dessiner le catalogue des gisements du fichier gisements.js
+                chargerMarqueursGisements();
+            } else {
+                // Mises à jour en direct pendant que vous marchez sur le terrain
+                userMarker.setLatLng([myLat, myLng]);
+                userCircle.setLatLng([myLat, myLng]);
+                userCircle.setRadius(accuracy);
+            }
         }
 
-        function relancerCalcul() {
-            if (maPositionActuelle) {
-                traiterGisements(maPositionActuelle.lat, maPositionActuelle.lng);
-            }
+        function chargerMarqueursGisements() {
+            // Nettoyage préventif
+            gisementsMarqueurs.forEach(m => map.removeLayer(m));
+            gisementsMarqueurs = [];
+
+            // Icône personnalisée rouge pour distinguer les gisements
+            const gemIcon = L.icon({
+                iconUrl: 'https://githubusercontent.com',
+                shadowUrl: 'https://cloudflare.com',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41]
+            });
+
+            // Boucle de lecture de la base réseau embarquée
+            REPERTOIRE_GISEMENTS.forEach(g => {
+                const marker = L.marker([g.lat, g.lng], { icon: gemIcon }).addTo(map)
+                    .bindPopup(`<b>${g.nom}</b><br><span style="font-size:12px;color:#555;">${g.details}</span>`);
+                gisementsMarqueurs.push(marker);
+            });
         }
 
         function handleGeoError(error) {
-            updateStatus('Signal satellite perdu', 'searching');
+            updateStatus('Recherche satellites...', 'searching');
         }
     </script>
 </body>
