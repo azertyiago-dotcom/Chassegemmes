@@ -17,12 +17,25 @@ jobs:
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '11' # On reste sur Java 11, idéal pour Cordova 12 et Gradle 7
+        java-version: '11' # Parfaitement compatible avec Gradle 7.6
 
     - name: Configuration de NodeJS
       uses: actions/setup-node@v4
       with:
         node-version: '18'
+
+    - name: Installation manuelle de Gradle 7.6
+      run: |
+        # 1. On supprime la version globale de Gradle 9 qui fait planter le build
+        sudo rm -rf /usr/share/gradle*
+        sudo rm -rf /usr/bin/gradle
+        
+        # 2. On télécharge proprement la version officielle de Gradle 7.6
+        wget -q https://gradle.org
+        sudo unzip -q gradle-7.6-bin.zip -d /usr/share
+        
+        # 3. On crée le lien système pour que Cordova le trouve instantanément dans le PATH
+        sudo ln -s /usr/share/gradle-7.6/bin/gradle /usr/bin/gradle
 
     - name: Installation globale de Cordova
       run: npm install -g cordova
@@ -38,13 +51,8 @@ jobs:
         
     - name: Compilation de l'APK Final
       run: |
-        # CORRIGÉ : On supprime la version globale de Gradle 9 qui force l'utilisation de Java 17
-        sudo rm -rf /usr/share/gradle*
-        sudo rm -rf /usr/bin/gradle
-        
         cd appli_native
-        # Cordova va maintenant installer et utiliser sa propre version locale propre (Gradle 7.6)
-        CORDOVA_ANDROID_GRADLE_VERSION="7.6" cordova build android --debug
+        cordova build android --debug
         
     - name: Livraison du fichier APK
       uses: actions/upload-artifact@v4
