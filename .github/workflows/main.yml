@@ -13,11 +13,14 @@ jobs:
     - name: Récupération du code
       uses: actions/checkout@v4
 
-    - name: Configuration de l'environnement Java
+    - name: Configuration de l'environnement Java (Hybride)
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '11'
+        java-version: |
+          17
+          11
+        # On installe les deux versions : Java 17 sera la version par défaut au début
 
     - name: Installation automatique de Gradle 7.6
       uses: gradle/actions/setup-gradle@v4
@@ -26,7 +29,7 @@ jobs:
 
     - name: Installation des Android Build Tools 33.0.2 manquants
       run: |
-        # On accepte les licences et on force l'installation de la version exacte réclamée par Cordova
+        # Cette commande s'exécute avec Java 17 par défaut, donc SdkManager ne plantera plus !
         echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;33.0.2"
 
     - name: Configuration de NodeJS
@@ -49,6 +52,8 @@ jobs:
     - name: Compilation de l'APK Final
       run: |
         cd appli_native
+        # Juste avant de compiler, on force Cordova à utiliser Java 11 pour rester compatible avec Android 12 et Gradle 7.6
+        export JAVA_HOME=$JAVA_HOME_11_X64
         CORDOVA_ANDROID_GRADLE_VERSION="7.6" cordova build android --debug
         
     - name: Livraison du fichier APK
