@@ -24,7 +24,6 @@ jobs:
       with:
         gradle-version: '7.6'
 
-    # CORRECTION ICI : On force l'utilisation de Java 17 fourni par défaut sur la machine uniquement pour l'étape du sdkmanager
     - name: Installation des Android Build Tools et SDK 33
       run: |
         export JAVA_HOME=$JAVA_HOME_17_X64
@@ -38,6 +37,12 @@ jobs:
 
     - name: Installation globale de Cordova
       run: npm install -g cordova
+
+    # NOUVELLE ÉTAPE CRITIQUE : Téléchargement des fichiers de la carte en local pour le build
+    - name: Téléchargement sécurisé des fichiers Leaflet locaux
+      run: |
+        curl -s https://cloudflare.com -o leaflet.js
+        curl -s https://cloudflare.com -o leaflet.css
 
     - name: Structure des dossiers et création du projet natif Android
       run: |
@@ -59,9 +64,14 @@ jobs:
         # 4. Injection intelligente et sécurisée de VOS fichiers de prospection
         if [ -d "www" ]; then
           cp -r www/* appli_native/www/
+          # Si le dossier www existe, on y glisse aussi les dépendances téléchargées
+          cp leaflet.js appli_native/www/
+          cp leaflet.css appli_native/www/
         else
           cp index.html appli_native/www/
           cp gisements.js appli_native/www/
+          cp leaflet.js appli_native/www/  # Injection du fichier JS de la carte
+          cp leaflet.css appli_native/www/ # Injection du fichier CSS des styles
           cp -r css appli_native/www/ 2>/dev/null || true
           cp -r js appli_native/www/ 2>/dev/null || true
           cp -r img appli_native/www/ 2>/dev/null || true
