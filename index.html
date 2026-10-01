@@ -25,7 +25,6 @@
             font-size: 14px;
             margin-bottom: 25px;
         }
-        /* Style du Radar de détection */
         .radar-container {
             position: relative;
             width: 160px;
@@ -50,7 +49,6 @@
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
-        /* Panneau d'affichage des coordonnées */
         .geo-box {
             background-color: #162447;
             border: 1px solid #4facfe;
@@ -76,7 +74,6 @@
         .label { color: #84a9ac; font-weight: bold; }
         .value { color: #00f2fe; font-family: monospace; font-size: 17px; }
         
-        /* État du signal et boutons */
         .status-badge {
             display: inline-block;
             padding: 6px 12px;
@@ -102,7 +99,6 @@
             border-radius: 5px;
             cursor: pointer;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
         }
         .btn-mode.gps-active {
             background-color: #00f2fe;
@@ -115,22 +111,18 @@
 <body>
 
     <h1>Gemmes Pro</h1>
-    <p class="subtitle">Détection Géologique & Hors-Ligne</p>
+    <p class="subtitle">Détection Géologique &amp; Hors-Ligne</p>
 
-    <!-- Visuel Radar -->
     <div class="radar-container">
         <div class="radar-sweep"></div>
     </div>
 
-    <!-- Badge d'état du signal -->
     <div id="status" class="status-badge searching">Initialisation...</div>
 
-    <!-- Sélecteur de Mode -->
     <div class="mode-container">
         <button id="modeBtn" class="btn-mode" onclick="toggleMode()">Mode : Wi-Fi / Réseau</button>
     </div>
 
-    <!-- Affichage des données géologiques -->
     <div class="geo-box">
         <div class="geo-line">
             <span class="label">Source du signal :</span>
@@ -154,14 +146,12 @@
         </div>
     </div>
 
-    <!-- Script Cordova Obligatoire -->
     <script src="cordova.js"></script>
     
     <script>
         let watchId = null;
-        let useHighAccuracy = false; // Faux au démarrage pour prioriser le Wi-Fi/Réseau
+        let useHighAccuracy = false;
 
-        // On attend que Cordova soit prêt
         document.addEventListener('deviceready', initTracking, false);
 
         function initTracking() {
@@ -169,7 +159,6 @@
         }
 
         function startWatch() {
-            // Si une surveillance est déjà active, on l'arrête d'abord
             if (watchId !== null) {
                 navigator.geolocation.clearWatch(watchId);
             }
@@ -178,17 +167,16 @@
             statusBadge.innerText = useHighAccuracy ? "Recherche signal Satellites GPS..." : "Recherche position Wi-Fi...";
             statusBadge.className = "status-badge searching";
 
+            // CORRIGÉ : Configuration optimisée pour le Wi-Fi de test et le GPS
             const geoOptions = {
-                enableHighAccuracy: useHighAccuracy, // Bascule dynamiquement selon le choix
-                maximumAge: 0,
-                timeout: 12000
+                enableHighAccuracy: useHighAccuracy,
+                maximumAge: useHighAccuracy ? 0 : 5000, // Autorise un cache récent de 5s pour le mode Wi-Fi rapide
+                timeout: useHighAccuracy ? 15000 : 8000 // Évite les blocages infinis
             };
 
-            // Lancement de la surveillance en continu
             watchId = navigator.geolocation.watchPosition(successLocation, errorLocation, geoOptions);
         }
 
-        // Changement de mode au clic sur le bouton
         function toggleMode() {
             useHighAccuracy = !useHighAccuracy;
             
@@ -205,7 +193,6 @@
                 sourceText.innerText = "Wi-Fi / Cellulaire";
             }
 
-            // Relancer le suivi avec la nouvelle configuration
             startWatch();
         }
 
@@ -235,10 +222,12 @@
                     statusBadge.innerText = "Erreur : Accès refusé";
                     break;
                 case error.POSITION_UNAVAILABLE:
-                    statusBadge.innerText = "Signal indisponible sur ce mode";
+                    statusBadge.innerText = "Signal réseau ou Wi-Fi indisponible";
                     break;
                 case error.TIMEOUT:
-                    statusBadge.innerText = "Recherche de coordonnées...";
+                    // CORRIGÉ : Si timeout en Wi-Fi, on tente de récupérer la dernière position connue de l'appareil
+                    statusBadge.innerText = "Actualisation...";
+                    navigator.geolocation.getCurrentPosition(successLocation, null, {enableHighAccuracy: false, maximumAge: 600000, timeout: 2000});
                     break;
                 default:
                     statusBadge.innerText = "Erreur de localisation";
