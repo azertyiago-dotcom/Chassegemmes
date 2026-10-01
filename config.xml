@@ -10,16 +10,12 @@
     <allow-intent href="http://*/*" />
     <allow-intent href="https://*/*" />
 
-    <!-- Extensions Natives Gratuites (Cordova Plugins) -->
+    <!-- Extensions Natives Compatibles Android 12 -->
     <plugin name="cordova-plugin-geolocation" spec="^5.0.0" />
-    <plugin name="cordova-plugin-background-mode" spec="^0.1.0" />
-    
-    <!-- CORRIGÉ : Version patchée compatible Android 12+ pour les notifications locales -->
     <plugin name="cordova-plugin-local-notification-12" spec="^0.1.3" />
 
     <!-- Configuration de la plateforme Android -->
     <platform name="android">
-        <!-- Autorisations profondes du système Android -->
         <config-file target="AndroidManifest.xml" parent="/*">
             <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
             <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -32,5 +28,3 @@
 
     <preference name="KeepRunning" value="true" />
 </widget>
-
-
