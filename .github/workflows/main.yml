@@ -13,11 +13,12 @@ jobs:
     - name: Récupération du code
       uses: actions/checkout@v4
 
-    - name: Configuration de l'environnement Java (Stable pour Gradle 7.6)
+    # Configuration initiale en Java 17 pour que l'outil sdkmanager d'Android fonctionne sans planter
+    - name: Configuration de l'environnement Java (Outils Android)
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '11'
+        java-version: '17'
 
     - name: Installation automatique de Gradle 7.6
       uses: gradle/actions/setup-gradle@v4
@@ -38,13 +39,11 @@ jobs:
 
     - name: Structure des dossiers et création du projet natif Android
       run: |
-        # Crée un dossier www temporaire si index.html est à la racine de votre dépôt Git
         if [ ! -d "www" ]; then
           mkdir www
           cp index.html www/ 2>/dev/null || true
         fi
         
-        # Création de l'espace Cordova
         cordova create appli_native com.chasseurdegemmes.pro "GemmesPro"
         cp config.xml appli_native/config.xml
         cp -r www/* appli_native/www/
@@ -55,12 +54,12 @@ jobs:
     - name: Installation du plugin Cordova Géolocalisation Officiel
       run: |
         cd appli_native
-        # Le plugin officiel suffit amplement et gère ses propres permissions sans planter le build
         cordova plugin add cordova-plugin-geolocation@^5.0.0
 
     - name: Compilation de l'APK Final
       run: |
         cd appli_native
+        # On force l'utilisation de Java 17 qui est parfaitement compatible avec Gradle 7.6 et Cordova 12
         cordova build android --debug
 
     - name: Livraison du fichier APK
