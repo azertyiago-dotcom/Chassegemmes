@@ -117,7 +117,7 @@
         <div class="radar-sweep"></div>
     </div>
 
-    <div id="status" class="status-badge searching">Démarrage...</div>
+    <div id="status" class="status-badge searching">Interface prête...</div>
 
     <div class="mode-container">
         <button id="modeBtn" class="btn-mode" onclick="toggleMode()">Mode : Wi-Fi / Réseau</button>
@@ -126,7 +126,7 @@
     <div class="geo-box">
         <div class="geo-line">
             <span class="label">Source du signal :</span>
-            <span id="signalSource" class="value" style="color: #4facfe;">Wi-Fi / Cellulaire</span>
+            <span id="signalSource" class="value" style="color: #4facfe;">Recherche...</span>
         </div>
         <div class="geo-line">
             <span class="label">Latitude :</span>
@@ -146,66 +146,84 @@
         </div>
     </div>
 
+    <!-- Le script cordova.js est déplacé tout en bas pour ne pas bloquer le chargement initial de la page -->
     <script src="cordova.js"></script>
+    
     <script>
         let watchId = null;
         let useHighAccuracy = false;
 
-        // Événement Cordova d'initialisation du téléphone
-        document.addEventListener('deviceready', () => {
-            updateStatus('Moteur Cordova prêt...', 'searching');
-            startGeolocation();
-        }, false);
+        // Fonction pour changer le texte à l'écran de manière sécurisée
+        function updateStatus(text, statusClass) {
+            const statusEl = document.getElementById('status');
+            if (statusEl) {
+                statusEl.textContent = text;
+                statusEl.className = 'status-badge ' + statusClass;
+            }
+        }
 
-        // Sécurité si Cordova met trop de temps à se charger dans la WebView
-        window.addEventListener('load', () => {
+        // Démarrage propre après le chargement complet des composants Web
+        window.addEventListener('DOMContentLoaded', () => {
+            updateStatus('Initialisation du système...', 'searching');
+            
+            // Attente de l'événement natif de l'application
+            document.addEventListener('deviceready', () => {
+                updateStatus('Connexion capteurs réussie', 'searching');
+                // Lancement léger avec un léger délai pour laisser Android respirer
+                setTimeout(startGeolocation, 1000);
+            }, false);
+
+            // Secours si le conteneur natif met trop de temps (ex: tablettes plus anciennes)
             setTimeout(() => {
                 const statusEl = document.getElementById('status');
-                if (statusEl.textContent === 'Démarrage...') {
-                    updateStatus('Initialisation Web alternative...', 'searching');
+                if (statusEl && statusEl.textContent === 'Initialisation du système...') {
+                    updateStatus('Mode secours activé', 'searching');
                     startGeolocation();
                 }
-            }, 2000);
+            }, 3000);
         });
 
         function startGeolocation() {
-            updateStatus('Demande du signal...', 'searching');
             if (watchId !== null) {
                 navigator.geolocation.clearWatch(watchId);
             }
-            
-            // On lance directement le suivi en temps réel. 
-            // C'est cette méthode native qui va forcer l'apparition immédiate de la popup de permission d'Android.
-            watchId = navigator.geolocation.watchPosition(
-                onSuccess, 
-                handleGeoError, 
-                {
-                    enableHighAccuracy: useHighAccuracy,
-                    maximumAge: 0,        // Forcer le système à chercher une nouvelle position et non un cache
-                    timeout: 20000        // Laisser 20 secondes au matériel pour accrocher un satellite ou une antenne
-                }
-            );
+
+            updateStatus('Recherche position...', 'searching');
+
+            if (!navigator.geolocation) {
+                updateStatus('Capteur introuvable', 'searching');
+                return;
+            }
+
+            // Options configurées pour s'adapter à la fois au Wi-Fi et au GPS matériel
+            const options = {
+                enableHighAccuracy: useHighAccuracy,
+                maximumAge: 0, 
+                timeout: 10000
+            };
+
+            watchId = navigator.geolocation.watchPosition(onSuccess, handleGeoError, options);
         }
 
         function onSuccess(position) {
-            updateStatus('Signal Actif', 'active');
+            updateStatus('Signal en ligne', 'active');
             document.getElementById('lat').textContent = position.coords.latitude.toFixed(6);
             document.getElementById('lng').textContent = position.coords.longitude.toFixed(6);
             document.getElementById('alt').textContent = position.coords.altitude !== null ? position.coords.altitude.toFixed(2) + ' m' : '--';
             document.getElementById('acc').textContent = position.coords.accuracy.toFixed(2) + ' m';
-            document.getElementById('signalSource').textContent = useHighAccuracy ? 'GPS (Haute Précision)' : 'Wi-Fi / Cellulaire';
+            document.getElementById('signalSource').textContent = useHighAccuracy ? 'GPS Matériel' : 'Wi-Fi / Antenne';
         }
 
         function handleGeoError(error) {
-            let msg = 'Erreur de recherche';
+            let msg = 'Erreur position';
             if (error.code === 1) {
-                msg = 'Autorisation refusée dans Android';
+                msg = 'Veuillez accepter les droits';
             } else if (error.code === 2) {
-                msg = 'Position indisponible (Activez le GPS)';
+                msg = 'Signal faible / Activez le GPS';
             } else if (error.code === 3) {
-                msg = 'Délai d\'attente dépassé (Recherche...)';
-                // En cas de timeout, on relance doucement la recherche
-                setTimeout(startGeolocation, 2000);
+                msg = 'Délai dépassé (Recherche...)';
+                // En cas de coupure de signal, relance douce automatique
+                setTimeout(startGeolocation, 3000);
             }
             updateStatus(msg, 'searching');
         }
@@ -213,8 +231,10 @@
         function toggleMode() {
             useHighAccuracy = !useHighAccuracy;
             const btn = document.getElementById('modeBtn');
-            btn.classList.toggle('gps-active', useHighAccuracy);
-            btn.textContent = 'Mode : ' + (useHighAccuracy ? 'GPS (Précis)' : 'Wi-Fi / Réseau');
+            if (btn) {
+                btn.classList.toggle('gps-active', useHighAccuracy);
+                btn.textContent = 'Mode : ' + (useHighAccuracy ? 'GPS (Précis)' : 'Wi-Fi / Réseau');
+            }
             startGeolocation();
         }
     </script>
