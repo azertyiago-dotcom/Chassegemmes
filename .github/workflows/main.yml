@@ -17,16 +17,16 @@ jobs:
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '17'
+        java-version: '11'
 
     - name: Installation automatique de Gradle 7.6
       uses: gradle/actions/setup-gradle@v4
       with:
         gradle-version: '7.6'
 
-    - name: Installation des Android Build Tools 33.0.2
+    - name: Installation des Android Build Tools et SDK 33
       run: |
-        echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;33.0.2"
+        echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;33.0.2" "platforms;android-33"
 
     - name: Configuration de NodeJS
       uses: actions/setup-node@v4
@@ -38,13 +38,13 @@ jobs:
 
     - name: Structure des dossiers et création du projet natif Android
       run: |
-        # Nettoyage préventif
+        # Nettoyage préventif des builds précédents
         rm -rf appli_native
         
-        # 1. Création de l'architecture officielle Cordova
-        cordova create appli_native com.chasseurdegemmes.pro "GemmesPro"
+        # 1. Création de l'architecture officielle Cordova avec le bon Package ID
+        cordova create appli_native com.gemmespro.app "GemmesPro"
         
-        # 2. Copie du fichier de configuration global
+        # 2. Copie du fichier de configuration global validé
         cp config.xml appli_native/config.xml
         
         # 3. Sécurité : Nettoyage du dossier www généré par défaut pour éviter les conflits
@@ -53,19 +53,19 @@ jobs:
         rm -rf appli_native/www/css
         rm -rf appli_native/www/img
         
-        # 4. Injection intelligente de VOS fichiers (gère si vous êtes à la racine ou dans un dossier www)
+        # 4. Injection intelligente et sécurisée de VOS fichiers de prospection
         if [ -d "www" ]; then
           cp -r www/* appli_native/www/
         else
           cp index.html appli_native/www/
-          # Copie aussi vos dossiers css/js/img s'ils existent à la racine de votre Git
+          cp gisements.js appli_native/www/
           cp -r css appli_native/www/ 2>/dev/null || true
           cp -r js appli_native/www/ 2>/dev/null || true
           cp -r img appli_native/www/ 2>/dev/null || true
         fi
         
-        # Vérification visuelle dans les logs que index.html est au bon endroit
-        echo "=== CONTENU DU DOSSIER WWW DE CORDOVA ==="
+        # Vérification dans les logs que index.html et gisements.js sont présents au bon endroit
+        echo "=== VÉRIFICATION DU DOSSIER WWW AVANT COMPILATION ==="
         ls -la appli_native/www/
         
         cd appli_native
@@ -74,7 +74,7 @@ jobs:
     - name: Installation du plugin Cordova Géolocalisation Officiel
       run: |
         cd appli_native
-        cordova plugin add cordova-plugin-geolocation@^5.0.0 --verbose
+        cordova plugin add cordova-plugin-geolocation@^5.0.0 --save --verbose
 
     - name: Compilation de l'APK Final
       run: |
@@ -84,8 +84,8 @@ jobs:
     - name: Extraction de l'APK vers la racine
       run: |
         mkdir -p output_apk
-        find . -name "*.apk" -exec cp {} output_apk/ \;
-        echo "Contenu du dossier de sortie :"
+        find appli_native/platforms/android/app/build/outputs/apk/ -name "*.apk" -exec cp {} output_apk/ \;
+        echo "=== CONTENU DU DOSSIER DE SORTIE ==="
         ls -la output_apk/
 
     - name: Livraison du fichier APK
