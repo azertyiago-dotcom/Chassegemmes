@@ -13,13 +13,11 @@ jobs:
     - name: Récupération du code
       uses: actions/checkout@v4
 
-    - name: Configuration de l'environnement Java (Double Version)
+    - name: Configuration de l'environnement Java
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: |
-          17
-          11
+        java-version: '11' # On reste sur Java 11, idéal pour Cordova 12 et Gradle 7
 
     - name: Configuration de NodeJS
       uses: actions/setup-node@v4
@@ -40,9 +38,12 @@ jobs:
         
     - name: Compilation de l'APK Final
       run: |
+        # CORRIGÉ : On supprime la version globale de Gradle 9 qui force l'utilisation de Java 17
+        sudo rm -rf /usr/share/gradle*
+        sudo rm -rf /usr/bin/gradle
+        
         cd appli_native
-        # On définit le chemin de Java 11 pour que Gradle 7.6 compile l'APK Android 12 sans encombre
-        export JAVA_HOME=$JAVA_HOME_11_X64
+        # Cordova va maintenant installer et utiliser sa propre version locale propre (Gradle 7.6)
         CORDOVA_ANDROID_GRADLE_VERSION="7.6" cordova build android --debug
         
     - name: Livraison du fichier APK
