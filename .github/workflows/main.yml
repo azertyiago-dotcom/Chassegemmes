@@ -28,7 +28,6 @@ jobs:
 
     - name: Installation des Android Build Tools 33.0.2 manquants
       run: |
-        # CORRIGÉ : On force temporairement la variable JAVA_HOME sur Java 17 pour le SdkManager
         export JAVA_HOME=$JAVA_HOME_17_X64
         echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;33.0.2"
 
@@ -44,20 +43,25 @@ jobs:
       run: |
         cordova create appli_native com.chasseurdegemmes.pro "GemmesPro"
         cp config.xml appli_native/config.xml
-        cp index.html appli_native/www/index.html
+        cp -r www/* appli_native/www/
         cd appli_native
         cordova platform add android@12.0.0
+
+    - name: Installation des plugins Cordova nécessaires
+      run: |
+        cd appli_native
+        cordova plugin add cordova-plugin-geolocation@^5.0.0
+        cordova plugin add cordova-plugin-android-permissions@^1.0.0
         cordova plugin add cordova-plugin-background-mode-fixed
-        
+
     - name: Compilation de l'APK Final
       run: |
         cd appli_native
-        # On repasse sur Java 11 pour que Cordova et Gradle 7.6 compilent sans erreur
         export JAVA_HOME=$JAVA_HOME_11_X64
         CORDOVA_ANDROID_GRADLE_VERSION="7.6" cordova build android --debug
-        
+
     - name: Livraison du fichier APK
       uses: actions/upload-artifact@v4
       with:
-        name: Application-Gemmes-Moutagne
+        name: Application-Gemmes-Montagne
         path: appli_native/platforms/android/app/build/outputs/apk/debug/app-debug.apk
