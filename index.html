@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <title>Gemmes Pro - Cartographie</title>
     
-    <!-- Inclusion sécurisée et stable de la bibliothèque cartographique Leaflet -->
+    <!-- Liens d'importations stables de la carte Leaflet -->
     <link rel="stylesheet" href="https://cloudflare.com" />
     <script src="https://cloudflare.com"></script>
 
@@ -80,7 +80,6 @@
             margin-right: 4px;
         }
 
-        /* Bouton ergonomique de recentrage pour le terrain */
         .btn-recenter {
             position: absolute;
             top: 20px;
@@ -110,17 +109,13 @@
 <body>
 
     <div id="main-container">
-        <!-- Bouton flottant pour recadrer la carte sur soi -->
-        <button class="btn-recenter" onclick="recenterMap()" title="Recentrer sur ma position">🎯</button>
-
-        <!-- Zone d'affichage de la carte -->
+        <button class="btn-recenter" onclick="recenterMap()" title="Recentrer">🎯</button>
         <div id="map"></div>
 
-        <!-- Tableau de bord de suivi GPS -->
         <div class="panel-inférieur">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <h1>Gemmes Pro Maps</h1>
-                <div id="status" class="status-badge searching">Fix Satellites...</div>
+                <div id="status" class="status-badge searching">Initialisation...</div>
             </div>
             
             <div class="geo-grid">
@@ -130,7 +125,6 @@
         </div>
     </div>
 
-    <!-- Chargement ordonné des bases et scripts natifs -->
     <script src="gisements.js"></script>
     <script src="cordova.js"></script>
     <script>
@@ -139,7 +133,6 @@
         let userMarker = null;
         let userCircle = null;
         let gisementsMarqueurs = [];
-        let useHighAccuracy = true; 
         let maDernierePosition = null;
 
         function updateStatus(text, statusClass) {
@@ -151,49 +144,73 @@
         }
 
         window.addEventListener('DOMContentLoaded', () => {
-            // Initialisation de base par défaut centrée sur la France
+            // Initialisation de la vue par défaut centrée sur la France
             map = L.map('map', { zoomControl: false }).setView([46.6033, 1.8883], 6);
             L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-            // Chargement des tuiles OpenStreetMap gratuites
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '© OpenStreetMap'
             }).addTo(map);
 
-            // Attente du déclenchement du conteneur Cordova
             document.addEventListener('deviceready', () => {
-                updateStatus('Modems Synchro', 'searching');
-                startGeolocation();
+                updateStatus('Calcul du premier Fix...', 'searching');
+                reveillerEtLancerGPS();
             }, false);
         });
 
-        function startGeolocation() {
+        // TECHNIQUE DE SÉCURITÉ CRITIQUE : Réveil forcé des capteurs
+        function reveillerEtLancerGPS() {
+            if (!navigator.geolocation) {
+                updateStatus('Capteur absent', 'searching');
+                return;
+            }
+
+            // Options ultra-permissives pour forcer le matériel Android à répondre
+            const bootstrapOptions = {
+                enableHighAccuracy: false, // On commence sans forcer le satellite pur pour éviter le gel
+                timeout: 4000,
+                maximumAge: 0
+            };
+
+            // Étape 1 : Appel unique pour débloquer le cache WebView
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    console.log("Capteur réveillé avec succès via réseau.");
+                    onSuccess(pos);
+                    lancerSuiviContinu(); // Étape 2 : Lancement du suivi régulier
+                },
+                (err) => {
+                    console.log("Échec du réveil réseau. Tentative de forçage direct...");
+                    lancerSuiviContinu(); // Secours : On force quand même le suivi si le réseau échoue
+                },
+                bootstrapOptions
+            );
+        }
+
+        function lancerSuiviContinu() {
             if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-            
-            // Configuration des options de secours pour empêcher les blocages indéfinis
+
             const options = {
-                enableHighAccuracy: useHighAccuracy,
-                maximumAge: 3000, 
-                timeout: 5000 // Déclenche un timeout après 5 secondes si aucun satellite ne répond
+                enableHighAccuracy: true, // Repasse en haute précision pour la prospection sur le terrain
+                maximumAge: 0, 
+                timeout: 10000 // Laisse 10 secondes aux satellites à chaque itération
             };
 
             watchId = navigator.geolocation.watchPosition(onSuccess, handleGeoError, options);
         }
 
         function onSuccess(position) {
-            updateStatus(useHighAccuracy ? 'GPS Haute Précision' : 'Position Réseau', 'active');
+            updateStatus('GPS Actif', 'active');
             
             const myLat = position.coords.latitude;
             const myLng = position.coords.longitude;
             const accuracy = position.coords.accuracy;
             maDernierePosition = [myLat, myLng];
 
-            // Remplissage sécurisé des éléments de l'interface
             document.getElementById('coordsAffichage').textContent = myLat.toFixed(4) + " , " + myLng.toFixed(4);
             document.getElementById('acc').textContent = accuracy.toFixed(0) + ' m';
 
-            // Dessin et mise à jour du point de l'utilisateur
             if (!userMarker) {
                 userMarker = L.marker([myLat, myLng]).addTo(map)
                     .bindPopup("<b>Votre position de fouille</b>").openPopup();
@@ -205,7 +222,7 @@
                     fillOpacity: 0.15
                 }).addTo(map);
 
-                map.setView([myLat, myLng], 12);
+                map.setView([myLat, myLng], 13);
                 chargerMarqueursGisements();
             } else {
                 userMarker.setLatLng([myLat, myLng]);
@@ -218,17 +235,15 @@
             gisementsMarqueurs.forEach(m => map.removeLayer(m));
             gisementsMarqueurs = [];
 
-            // Marqueurs rouges pour distinguer visuellement les filons
             const gemIcon = L.icon({
                 iconUrl: 'https://cloudflare.com',
                 shadowUrl: 'https://cloudflare.com',
-                iconSize:,
-                iconAnchor:,
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
                 popupAnchor: [1, -34],
                 shadowSize: [41, 41]
             });
 
-            // Boucle de lecture sécurisée du fichier gisements.js embarqué
             if (typeof REPERTOIRE_GISEMENTS !== 'undefined') {
                 REPERTOIRE_GISEMENTS.forEach(g => {
                     const marker = L.marker([g.lat, g.lng], { icon: gemIcon }).addTo(map)
@@ -238,24 +253,12 @@
             }
         }
 
-        // REPRISE AUTOMATIQUE EN CAS DE PERTE DE SIGNAL (INTÉRIEUR / FORÊT BLANCHE)
         function handleGeoError(error) {
-            if (error.code === 3) {
-                // Timeout détecté : On tente immédiatement de basculer sur le réseau Wi-Fi/Antennes
-                if (useHighAccuracy) {
-                    useHighAccuracy = false;
-                    startGeolocation();
-                } else {
-                    updateStatus('Satellites introuvables', 'searching');
-                }
-            } else if (error.code === 1) {
-                updateStatus('Droits GPS requis', 'searching');
-            } else {
-                updateStatus('Recherche signal...', 'searching');
-            }
+            console.log("Erreur de suivi GPS. Code: " + error.code);
+            // Si le signal satellite pur est perdu, on maintient l'affichage mais on repasse en recherche active
+            updateStatus('Recherche signal...', 'searching');
         }
 
-        // Fonction liée au bouton flottant pour recentrer manuellement
         function recenterMap() {
             if (maDernierePosition && map) {
                 map.setView(maDernierePosition, 14);
