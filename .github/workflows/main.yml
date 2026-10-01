@@ -1,0 +1,47 @@
+name: Generation APK Gratuite
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Récupération du code
+      uses: actions/checkout@v4
+
+    - name: Configuration de l'environnement Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '11' # Adapté pour cordova-android@12
+
+    - name: Configuration de NodeJS
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Installation globale de Cordova
+      run: npm install -g cordova
+
+    - name: Création du projet natif Android
+      run: |
+        cordova create appli_native com.chasseurdegemmes.pro "GemmesPro"
+        cp config.xml appli_native/config.xml # Copie de votre fichier de configuration
+        cp index.html appli_native/www/index.html # Copie de votre page principale
+        cd appli_native
+        cordova platform add android@12.0.0
+        
+    - name: Compilation de l'APK Final
+      run: |
+        cd appli_native
+        cordova build android --debug
+        
+    - name: Livraison du fichier APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: Application-Gemmes-Moutagne
+        path: appli_native/platforms/android/app/build/outputs/apk/debug/app-debug.apk
