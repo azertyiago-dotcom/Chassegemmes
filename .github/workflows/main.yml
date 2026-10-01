@@ -33,10 +33,9 @@ jobs:
         cp config.xml appli_native/config.xml
         cp index.html appli_native/www/index.html
         cd appli_native
-        # On force la version stable de cordova-android 12
         cordova platform add android@12.0.0
-        # On injecte la version communautaire de background-mode adaptée aux builds récents
-        cordova plugin add cordova-plugin-background-mode-2
+        # CORRIGÉ : Utilisation du fork nettoyé et compatible Android 12 sans l'erreur windows-sdk
+        cordova plugin add cordova-plugin-background-mode-fixed
         
     - name: Compilation de l'APK Final
       run: |
