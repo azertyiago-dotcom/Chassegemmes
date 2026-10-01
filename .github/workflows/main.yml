@@ -17,7 +17,7 @@ jobs:
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '11' # Adapté pour cordova-android@12
+        java-version: '11'
 
     - name: Configuration de NodeJS
       uses: actions/setup-node@v4
@@ -30,10 +30,13 @@ jobs:
     - name: Création du projet natif Android
       run: |
         cordova create appli_native com.chasseurdegemmes.pro "GemmesPro"
-        cp config.xml appli_native/config.xml # Copie de votre fichier de configuration
-        cp index.html appli_native/www/index.html # Copie de votre page principale
+        cp config.xml appli_native/config.xml
+        cp index.html appli_native/www/index.html
         cd appli_native
+        # On force la version stable de cordova-android 12
         cordova platform add android@12.0.0
+        # On injecte la version communautaire de background-mode adaptée aux builds récents
+        cordova plugin add cordova-plugin-background-mode-2
         
     - name: Compilation de l'APK Final
       run: |
