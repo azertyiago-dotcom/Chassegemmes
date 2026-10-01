@@ -3,7 +3,16 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-    <title>Gemmes Pro - Prospection Mobile</title>
+    
+    <!-- Sécurité Android : Autorise le script local et l'affichage des tuiles OpenStreetMap -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: gap: https://gstatic.com 'unsafe-eval'; style-src 'self' 'unsafe-inline'; media-src *; img-src 'self' data: https://*.tile.openstreetmap.org;">
+
+    <title>Gemmes Pro - Cartographie Locale</title>
+    
+    <!-- Chargement immédiat des fichiers locaux intégrés dans l'APK -->
+    <link rel="stylesheet" href="leaflet.css" />
+    <script src="leaflet.js"></script>
+
     <style>
         html, body {
             margin: 0;
@@ -19,17 +28,11 @@
             flex-direction: column;
             height: 100%;
         }
-        /* Zone d'attente locale sans crash */
         #map {
             flex: 1;
             width: 100%;
             z-index: 1;
             background-color: #111b30;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            color: #84a9ac;
         }
         .panel-inférieur {
             background-color: #162447;
@@ -70,13 +73,12 @@
 <body>
 
     <div id="main-container">
-        <!-- Message initial écrit en brut pour vérifier que l'écran ne gèle pas -->
-        <div id="map">Chargement des modules cartographiques...</div>
+        <div id="map"></div>
 
         <div class="panel-inférieur">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <h1>Gemmes Pro Maps</h1>
-                <div id="status" class="status-badge searching">Vérification Permissions...</div>
+                <div id="status" class="status-badge searching">Initialisation...</div>
             </div>
             <div class="geo-grid">
                 <div class="geo-item"><span>GPS:</span><span id="coordsAffichage">Recherche...</span></div>
@@ -85,94 +87,55 @@
         </div>
     </div>
 
-    <!-- Chargement impératif de la base locale en premier -->
     <script src="gisements.js"></script>
     <script src="cordova.js"></script>
     
     <script>
         let map = null;
         let userMarker = null;
-        let isMapLoaded = false;
 
         function updateStatus(text, statusClass) {
             document.getElementById('status').textContent = text;
             document.getElementById('status').className = 'status-badge ' + statusClass;
         }
 
-        // On écoute le signal natif Cordova pour démarrer les capteurs
         document.addEventListener('deviceready', () => {
-            updateStatus('Capteurs OK - Fix GPS...', 'searching');
+            updateStatus('Recherche satellites...', 'searching');
             
-            // Lancement immédiat du capteur avec tolérance maximale pour déclencher la pop-up de droits Android
-            navigator.geolocation.getCurrentPosition(onFirstFixSuccess, onFirstFixError, {
-                enableHighAccuracy: false, // Évite le gel satellite intérieur au premier démarrage
-                timeout: 8000,
-                maximumAge: 60000 // Accepte une position en cache si existante
+            // Démarrage direct du suivi GPS
+            navigator.geolocation.watchPosition(onLocationSuccess, onLocationError, {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 10000
             });
         }, false);
 
-        function onFirstFixSuccess(position) {
-            updateStatus('Signal validé', 'active');
-            injecterLibrairieCartographique(position);
-        }
-
-        function onFirstFixError(error) {
-            console.log("Erreur de premier fix, forçage des cartes quand même.");
-            // Secours : si le GPS stagne (ex: en intérieur), on simule une position sur Bordeaux pour forcer l'affichage
-            const simulationAquitaine = {
-                coords: { latitude: 44.8377, longitude: -0.5791, accuracy: 999 }
-            };
-            injecterLibrairieCartographique(simulationAquitaine);
-        }
-
-        // INJECTION DYNAMIQUE APRÈS RÉSOLUTION DU GPS POUR ÉVITER LE CRASH WEBVIEW
-        function injecterLibrairieCartographique(initialPosition) {
-            if (isMapLoaded) return;
-            isMapLoaded = true;
-
-            document.getElementById('map').innerHTML = ""; // Vide le texte de chargement
-
-            // Chargement CSS Leaflet
-            let leafletCss = document.createElement('link');
-            leafletCss.rel = 'stylesheet';
-            leafletCss.href = 'https://cloudflare.com';
-            document.head.appendChild(leafletCss);
-
-            // Chargement JS Leaflet
-            let leafletJs = document.createElement('script');
-            leafletJs.src = 'https://cloudflare.com';
-            leafletJs.onload = function() {
-                // Initialisation de la carte une fois le fichier JS téléchargé en mémoire
-                map = L.map('map', { zoomControl: true }).setView([initialPosition.coords.latitude, initialPosition.coords.longitude], 12);
-                
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-
-                // Traitement de la position
-                rafraichirPositionEcran(initialPosition);
-                chargerMarqueursGisements();
-
-                // Lancement de l'écoute continue sur le terrain
-                navigator.geolocation.watchPosition(rafraichirPositionEcran, () => {}, {
-                    enableHighAccuracy: true,
-                    maximumAge: 0
-                });
-            };
-            document.head.appendChild(leafletJs);
-        }
-
-        function rafraichirPositionEcran(position) {
+        function onLocationSuccess(position) {
+            updateStatus('GPS Actif', 'active');
+            
             const lat = position.coords.latitude;
             const lng = position.coords.longitude;
+            const accuracy = position.coords.accuracy;
             
             document.getElementById('coordsAffichage').textContent = lat.toFixed(4) + " , " + lng.toFixed(4);
-            document.getElementById('acc').textContent = position.coords.accuracy.toFixed(0) + ' m';
+            document.getElementById('acc').textContent = accuracy.toFixed(0) + ' m';
 
-            if (map) {
-                if (!userMarker) {
-                    userMarker = L.marker([lat, lng]).addTo(map).bindPopup("Vous êtes ici").openPopup();
-                } else {
-                    userMarker.setLatLng([lat, lng]);
-                }
+            // Initialisation de la carte si elle n'existe pas encore
+            if (!map) {
+                map = L.map('map', { zoomControl: true }).setView([lat, lng], 13);
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+                    maxZoom: 19 
+                }).addTo(map);
+
+                chargerMarqueursGisements();
+            }
+
+            // Mise à jour du marqueur de l'utilisateur
+            if (!userMarker) {
+                userMarker = L.marker([lat, lng]).addTo(map).bindPopup("Vous êtes ici").openPopup();
+            } else {
+                userMarker.setLatLng([lat, lng]);
             }
         }
 
@@ -183,6 +146,10 @@
                         .bindPopup(`<b>${g.nom}</b><br><span style="font-size:11px;color:#666;">${g.details}</span>`);
                 });
             }
+        }
+
+        function onLocationError(error) {
+            updateStatus('Signal faible...', 'searching');
         }
     </script>
 </body>
