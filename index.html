@@ -4,12 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     
-    <!-- Sécurité permissive pour s'assurer que rien ne bloque l'affichage local -->
+    <!-- Sécurité Android : Autorise le fonctionnement en circuit fermé local -->
     <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: gap:">
 
-    <title>Gemmes Pro - Radar &amp; Liste</title>
+    <title>Gemmes Pro - Radar Fix</title>
     
-    <!-- Fichiers cartographiques locaux (injectés par votre workflow) -->
+    <!-- Fichiers cartographiques locaux (gérés par le workflow) -->
     <link rel="stylesheet" href="leaflet.css" />
     <script src="leaflet.js"></script>
 
@@ -30,14 +30,15 @@
             height: 100%;
         }
 
-        /* CORRECTION : Hauteur fixe absolue de 55% de l'écran pour le Radar */
+        /* Hauteur fixe absolue pour le Radar */
         #map {
             height: 55vh;
             width: 100%;
             background-color: #0f172a;
+            position: relative;
         }
 
-        /* CORRECTION : Hauteur fixe de 45% pour le panneau des données et de la liste */
+        /* Hauteur fixe pour le panneau des données et de la liste */
         .panel-inférieur {
             height: 45vh;
             background-color: #162447;
@@ -86,7 +87,6 @@
         .geo-item { font-family: monospace; color: #00f2fe; }
         .geo-item span { color: #84a9ac; font-family: sans-serif; }
 
-        /* Style de la liste défilante des gisements */
         .gisement-title {
             color: #4facfe;
             font-size: 13px;
@@ -101,7 +101,7 @@
             margin: 0;
             padding: 0;
             list-style: none;
-            overflow-y: auto; /* Permet de faire défiler les gisements s'il y en a beaucoup */
+            overflow-y: auto;
         }
 
         .gisement-item {
@@ -138,14 +138,12 @@
 
             <div class="gisement-title">📌 Gisements à proximité :</div>
             
-            <!-- Liste dynamique contenant les gisements réels -->
             <ul id="listeGisements" class="gisements-list">
                 <li style="text-align: center; color: #84a9ac; padding-top: 10px; font-size: 12px;">En attente de coordonnées satellites...</li>
             </ul>
         </div>
     </div>
 
-    <!-- Chargement ordonné des fichiers -->
     <script src="gisements.js"></script>
     <script src="cordova.js"></script>
     
@@ -179,13 +177,11 @@
             }
         }
 
-        // Écouteurs de démarrage mobiles
         document.addEventListener('deviceready', demarrerApplication, false);
         window.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => { if (!systemeDemarre) demarrerApplication(); }, 1500);
         });
 
-        // Formule mathématique globale de distance
         function calculerDistance(lat1, lon1, lat2, lon2) {
             const R = 6371; 
             const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -206,62 +202,69 @@
             document.getElementById('coordsAffichage').textContent = lat.toFixed(4) + " , " + lng.toFixed(4);
             document.getElementById('acc').textContent = accuracy.toFixed(0) + ' m';
 
-            // 1. Gestion de la zone Radar graphique (Leaflet)
-            if (!map) {
-                map = L.map('map', { 
-                    zoomControl: true,
-                    attributionControl: false 
-                }).setView([lat, lng], 11);
+            // CORRECTION CRITIQUE : Initialisation sécurisée et asynchrone du Radar Leaflet
+            if (!map && typeof L !== 'undefined' && typeof L.map === 'function') {
+                try {
+                    // Petit délai de 100ms pour laisser à la WebView le temps de stabiliser les dimensions HTML de la div #map
+                    setTimeout(() => {
+                        if (map) return; // Sécurité anti-doublon
+                        
+                        map = L.map('map', { 
+                            zoomControl: true,
+                            attributionControl: false 
+                        }).setView([lat, lng], 11);
 
-                // Cercles concentriques de distance
-                L.circle([lat, lng], { radius: 2000, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map);
-                L.circle([lat, lng], { radius: 5000, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map);
-                L.circle([lat, lng], { radius: 10000, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map);
+                        // Cercles concentriques de distance radar
+                        L.circle([lat, lng], { radius: 2000, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map);
+                        L.circle([lat, lng], { radius: 5000, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map);
+                        L.circle([lat, lng], { radius: 10000, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map);
+
+                        // Injection immédiate des points graphiques sur le radar
+                        actualiserMarqueursRadar(lat, lng);
+                    }, 100);
+                } catch (e) {
+                    console.log("Erreur d'initialisation de la carte : " + e.message);
+                }
+            } else if (map) {
+                // Si la carte existe déjà, on met simplement à jour les positions en direct
+                if (userMarker) userMarker.setLatLng([lat, lng]);
             }
 
+            // Génération de la liste textuelle (déjà fonctionnelle chez vous)
+            genererAffichageGisements(lat, lng);
+        }
+
+        function actualiserMarqueursRadar(myLat, myLng) {
+            if (typeof REPERTOIRE_GISEMENTS === 'undefined' || !map) return;
+
+            // Ajout du repère de l'utilisateur au centre
             if (!userMarker) {
-                userMarker = L.circleMarker([lat, lng], {
+                userMarker = L.circleMarker([myLat, myLng], {
                     radius: 9,
                     color: '#ffffff',
                     weight: 2,
                     fillColor: '#00f2fe',
                     fillOpacity: 1
                 }).addTo(map).bindPopup("Vous êtes ici");
-            } else {
-                userMarker.setLatLng([lat, lng]);
             }
 
-            // 2. Traitement de la liste textuelle et des marqueurs graphiques
-            genererAffichageGisements(lat, lng);
+            // Ajout des points rouges géologiques
+            REPERTOIRE_GISEMENTS.forEach(g => {
+                const distanceGis = calculerDistance(myLat, myLng, g.lat, g.lng);
+                let affichageDist = distanceGis < 1 
+                    ? Math.round(distanceGis * 1000) + " m" 
+                    : distanceGis.toFixed(1) + " km";
+
+                L.circleMarker([g.lat, g.lng], {
+                    radius: 7,
+                    color: '#1a1a2e',
+                    weight: 1,
+                    fillColor: '#b83b5e',
+                    fillOpacity: 0.9
+                }).addTo(map).bindPopup(`<b>${g.nom}</b><br>Distance: ${affichageDist}`);
+            });
         }
 
         function genererAffichageGisements(myLat, myLng) {
-            if (typeof REPERTOIRE_GISEMENTS === 'undefined' || !map) return;
-
-            const conteneurList = document.getElementById('listeGisements');
-            conteneurList.innerHTML = ''; // Vide l'ancien texte d'attente
-
-            // Calcul des distances et injection dans un tableau temporaire
-            let gisementsAvecDistance = REPERTOIRE_GISEMENTS.map(g => {
-                return { ...g, distance: calculerDistance(myLat, myLng, g.lat, g.lng) };
-            });
-
-            // Tri mathématique du plus proche au plus lointain
-            gisementsAvecDistance.sort((a, b) => a.distance - b.distance);
-
-            // Boucle de rendu (génère à la fois le point sur le radar ET la ligne dans la liste)
-            gisementsAvecDistance.forEach(g => {
-                // Rendu 1 : Affichage de la ligne dans la liste textuelle en bas
-                const li = document.createElement('li');
-                li.className = 'gisement-item';
-                let affichageDist = g.distance < 1 
-                    ? Math.round(g.distance * 1000) + " m" 
-                    : g.distance.toFixed(1) + " km";
-
-                li.innerHTML = `
-                    <span class="gisement-dist">${affichageDist}</span>
-                    <div class="gisement-name">${g.nom}</div>
-                    <div class="gisement-desc">${g.details}</div>
-                `;
-                conteneurList.appendChild(li);
+            if (typeof REPERTOIRE_GISEMENTS === 'undefined') return;
 
