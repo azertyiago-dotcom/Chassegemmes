@@ -60,9 +60,10 @@ jobs:
         cd appli_native
         cordova build android --debug
 
-    # Changement critique ici : utilisation de *.apk pour attraper le fichier peu importe son nom
-    - name: Livraison du fichier APK
+    # Étape de débogage et de sécurité : recherche globale de l'APK pour forcer sa capture
+    - name: Livraison du fichier APK (Scan Récursif Complet)
       uses: actions/upload-artifact@v4
       with:
         name: Application-Gemmes-Montagne
-        path: appli_native/platforms/android/app/build/outputs/apk/debug/*.apk
+        path: |
+          appli_native/**/*.apk
