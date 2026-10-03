@@ -1,9 +1,12 @@
 <?xml version='1.0' encoding='utf-8'?>
-<widget id="com.gemmespro.app" version="1.0.0" xmlns="http://w3.org" xmlns:cdv="http://apache.org" xmlns:android="http://android.com">
+<widget id="com.gemmespro.app" version="1.0.0"
+        xmlns="http://www.w3.org/ns/widgets"
+        xmlns:cdv="http://cordova.apache.org/ns/1.0"
+        xmlns:android="http://schemas.android.com/apk/res/android">
     <name>GemmesPro</name>
     <description>Application de détection géologique par géolocalisation</description>
     <author email="contact@gemmespro.com" href="https://gemmespro.com">Gemmes Pro Team</author>
-    
+
     <content src="index.html" />
     <access origin="*" />
     <allow-intent href="http://*/*" />
@@ -15,8 +18,8 @@
     <platform name="android">
         <allow-intent href="market:*" />
         <preference name="android-minSdkVersion" value="22" />
-        <preference name="android-targetSdkVersion" value="34" />
-        
+        <preference name="android-targetSdkVersion" value="33" />
+
         <config-file target="AndroidManifest.xml" parent="/manifest">
             <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
             <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -24,6 +27,5 @@
         </config-file>
     </platform>
 
-    <!-- Plugin de géolocalisation officielle avec configuration WebView standard -->
     <plugin name="cordova-plugin-geolocation" spec="^5.0.0" />
 </widget>
