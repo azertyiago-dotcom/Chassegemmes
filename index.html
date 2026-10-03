@@ -1,272 +1,172 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-    
-    <!-- Sécurité Android : Autorise le fonctionnement en circuit fermé local complet -->
-    <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: gap:">
-
-    <title>Gemmes Pro - Radar Infaillible</title>
-    
-    <!-- Fichiers cartographiques locaux (gérés par le workflow) -->
-    <link rel="stylesheet" href="leaflet.css" />
-    <script src="leaflet.js"></script>
-
-    <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            background-color: #1a1a2e;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: #e2e2e2;
-            overflow: hidden;
-        }
-
-        #main-container {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-        }
-
-        /* Hauteur fixe absolue pour le Radar */
-        #map {
-            height: 55vh;
-            width: 100%;
-            background-color: #0f172a;
-            position: relative;
-        }
-
-        /* Hauteur fixe pour le panneau des données et de la liste */
-        .panel-inférieur {
-            height: 45vh;
-            background-color: #162447;
-            border-top: 3px solid #4facfe;
-            box-sizing: border-box;
-            padding: 10px 15px;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .header-panel {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-
-        h1 {
-            color: #00f2fe;
-            margin: 0;
-            text-transform: uppercase;
-            font-size: 16px;
-        }
-
-        .status-badge {
-            padding: 3px 8px;
-            border-radius: 10px;
-            font-size: 10px;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-        .searching { background-color: #b83b5e; color: #fff; }
-        .active { background-color: #00b16a; color: #fff; }
-        
-        .geo-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 5px;
-            font-size: 12px;
-            background: #1f4068;
-            padding: 6px;
-            border-radius: 4px;
-            margin-bottom: 8px;
-        }
-        .geo-item { font-family: monospace; color: #00f2fe; }
-        .geo-item span { color: #84a9ac; font-family: sans-serif; }
-
-        .gisement-title {
-            color: #4facfe;
-            font-size: 13px;
-            font-weight: bold;
-            text-transform: uppercase;
-            margin-bottom: 5px;
-            text-align: left;
-        }
-
-        .gisements-list {
-            flex: 1;
-            margin: 0;
-            padding: 0;
-            list-style: none;
-            overflow-y: auto;
-        }
-
-        .gisement-item {
-            background: #111b30;
-            border-left: 4px solid #b83b5e;
-            margin-bottom: 5px;
-            padding: 8px 10px;
-            border-radius: 0 4px 4px 0;
-            text-align: left;
-            font-size: 13px;
-        }
-        .gisement-name { font-weight: bold; color: #fff; }
-        .gisement-dist { float: right; color: #00f2fe; font-weight: bold; font-family: monospace; }
-        .gisement-desc { font-size: 11px; color: #84a9ac; margin-top: 2px; }
-    </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: gap:">
+<title>Gemmes Pro - Radar</title>
+<link rel="stylesheet" href="leaflet.css" />
+<script src="leaflet.js"></script>
+<style>
+html,body{margin:0;padding:0;height:100%;background:#1a1a2e;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;color:#e2e2e2;overflow:hidden}
+#main-container{display:flex;flex-direction:column;height:100%}
+#map{height:55vh;width:100%;background:#0f172a;position:relative}
+.panel-bas{height:45vh;background:#162447;border-top:3px solid #4facfe;box-sizing:border-box;padding:10px 15px;display:flex;flex-direction:column;overflow:hidden}
+.header-panel{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+h1{color:#00f2fe;margin:0;text-transform:uppercase;font-size:16px}
+.status-badge{padding:3px 8px;border-radius:10px;font-size:10px;font-weight:bold;text-transform:uppercase}
+.searching{background:#b83b5e;color:#fff}
+.active{background:#00b16a;color:#fff}
+.network{background:#e0a100;color:#fff}
+.geo-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;font-size:12px;background:#1f4068;padding:6px;border-radius:4px;margin-bottom:8px}
+.geo-item{font-family:monospace;color:#00f2fe}
+.geo-item span:first-child{color:#84a9ac;font-family:sans-serif}
+.gisement-title{color:#4facfe;font-size:13px;font-weight:bold;text-transform:uppercase;margin-bottom:5px}
+.gisements-list{flex:1;margin:0;padding:0;list-style:none;overflow-y:auto}
+.gisement-item{background:#111b30;border-left:4px solid #b83b5e;margin-bottom:5px;padding:8px 10px;border-radius:0 4px 4px 0;font-size:13px}
+.gisement-name{font-weight:bold;color:#fff}
+.gisement-dist{float:right;color:#00f2fe;font-weight:bold;font-family:monospace}
+.gisement-desc{font-size:11px;color:#84a9ac;margin-top:2px}
+</style>
 </head>
 <body>
-
-    <div id="main-container">
-        <!-- Partie Haute : Le Radar graphique -->
-        <div id="map"></div>
-
-        <!-- Partie Basse : Le Tableau de bord & La Liste de Proximité -->
-        <div class="panel-inférieur">
-            <div class="header-panel">
-                <h1>Gemmes Pro Radar</h1>
-                <div id="status" class="status-badge searching">Initialisation...</div>
-            </div>
-            
-            <div class="geo-grid">
-                <div class="geo-item"><span>GPS:</span><span id="coordsAffichage">Recherche...</span></div>
-                <div class="geo-item" style="text-align: right;"><span>Précision:</span><span id="acc">--</span></div>
-            </div>
-
-            <div class="gisement-title">📌 Gisements à proximité :</div>
-            
-            <ul id="listeGisements" class="gisements-list">
-                <li style="text-align: center; color: #84a9ac; padding-top: 10px; font-size: 12px;">En attente de coordonnées satellites...</li>
-            </ul>
-        </div>
+<div id="main-container">
+  <div id="map"></div>
+  <div class="panel-bas">
+    <div class="header-panel">
+      <h1>Gemmes Pro Radar</h1>
+      <div id="status" class="status-badge searching">Initialisation...</div>
     </div>
+    <div class="geo-grid">
+      <div class="geo-item"><span>Pos: </span><span id="coordsAffichage">Recherche...</span></div>
+      <div class="geo-item" style="text-align:right"><span>Précision: </span><span id="acc">--</span></div>
+    </div>
+    <div class="gisement-title">📌 Gisements à proximité :</div>
+    <ul id="listeGisements" class="gisements-list">
+      <li style="text-align:center;color:#84a9ac;padding-top:10px;font-size:12px">En attente de position...</li>
+    </ul>
+  </div>
+</div>
 
-    <script src="gisements.js"></script>
-    <script src="cordova.js"></script>
-    
-    <script>
-        let map = null;
-        let userMarker = null;
-        let systemeDemarre = false;
-        let useHighAccuracy = true; 
-        let watchdogTimer = null;
-        let positionRecueUneFois = false;
+<script src="gisements.js"></script>
+<script src="cordova.js"></script>
+<script>
+let map = null, userMarker = null, carteEnCours = false;
+let cercles = [], marqueursGis = [];
+let systemeDemarre = false, watchReseau = null, watchGPS = null;
+let dernierGPS = 0, positionRecue = false;
 
-        function updateStatus(text, statusClass) {
-            const el = document.getElementById('status');
-            if (el) {
-                el.textContent = text;
-                el.className = 'status-badge ' + statusClass;
-            }
-        }
+function updateStatus(text, cls) {
+  const el = document.getElementById('status');
+  if (el) { el.textContent = text; el.className = 'status-badge ' + cls; }
+}
 
-        function demarrerApplication() {
-            if (systemeDemarre) return;
-            systemeDemarre = true;
-            lancerSuiviGPS();
-        }
+function demarrerApplication() {
+  if (systemeDemarre) return;
+  systemeDemarre = true;
+  lancerSuiviGPS();
+}
 
-        function lancerSuiviGPS() {
-            if (watchId !== null) {
-                navigator.geolocation.clearWatch(watchId);
-            }
+// Deux suivis en parallèle : réseau/Wi-Fi (rapide) + GPS (précis)
+function lancerSuiviGPS() {
+  if (!navigator.geolocation) { updateStatus('GPS indisponible', 'searching'); return; }
+  updateStatus('Recherche position...', 'searching');
 
-            updateStatus(useHighAccuracy ? 'Recherche Satellites...' : 'Secours Réseau...', 'searching');
-            
-            // --- CORRECTION DU BLOCAGE FICTIONNEL : LE CHIEN DE GARDE ---
-            if (watchdogTimer !== null) clearTimeout(watchdogTimer);
-            
-            // Si après 7 secondes le téléphone n'a rien renvoyé du tout, on force la WebView à changer de mode
-            watchdogTimer = setTimeout(() => {
-                if (!positionRecueUneFois && useHighAccuracy) {
-                    console.log("Watchdog : Satellites bloqués. Bascule forcée sur le réseau mobile/Wi-Fi.");
-                    useHighAccuracy = false;
-                    lancerSuiviGPS(); // Relance immédiate avec le mode réseau permissif
-                }
-            }, 7000);
+  watchReseau = navigator.geolocation.watchPosition(
+    p => onPosition(p, 'reseau'), onLocationError,
+    { enableHighAccuracy: false, maximumAge: 30000, timeout: 20000 });
 
-            if (navigator.geolocation) {
-                watchId = navigator.geolocation.watchPosition(onLocationSuccess, onLocationError, {
-                    enableHighAccuracy: useHighAccuracy,
-                    maximumAge: 0,
-                    timeout: 9000
-                });
-            } else {
-                updateStatus('Erreur GPS', 'searching');
-            }
-        }
+  watchGPS = navigator.geolocation.watchPosition(
+    p => onPosition(p, 'gps'), onLocationError,
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
+}
 
-        document.addEventListener('deviceready', demarrerApplication, false);
-        window.addEventListener('DOMContentLoaded', () => {
-            setTimeout(() => { if (!systemeDemarre) demarrerApplication(); }, 1500);
+document.addEventListener('deviceready', demarrerApplication, false);
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => { if (!systemeDemarre) demarrerApplication(); }, 1500);
+});
+
+function calculerDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371, rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad, dLon = (lon2 - lon1) * rad;
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function onPosition(position, source) {
+  const now = Date.now();
+  if (source === 'gps') dernierGPS = now;
+  else if (now - dernierGPS < 20000) return; // un fix GPS récent prime sur le réseau
+
+  positionRecue = true;
+  if (source === 'gps') updateStatus('GPS précis', 'active');
+  else updateStatus('Position réseau', 'network');
+
+  const lat = position.coords.latitude;
+  const lng = position.coords.longitude;
+  const acc = position.coords.accuracy;
+  if (lat == null || lng == null) return;
+
+  document.getElementById('coordsAffichage').textContent = lat.toFixed(4) + ' , ' + lng.toFixed(4);
+  document.getElementById('acc').textContent = (acc != null ? acc.toFixed(0) : '--') + ' m';
+
+  if (!map) initCarte(lat, lng); else majCarte(lat, lng);
+  genererAffichageGisements(lat, lng);
+}
+
+function initCarte(lat, lng) {
+  if (carteEnCours || typeof L === 'undefined') return;
+  carteEnCours = true;
+  setTimeout(() => {
+    try {
+      map = L.map('map', { zoomControl: true, attributionControl: false }).setView([lat, lng], 11);
+      [2000, 5000, 10000].forEach(r => {
+        cercles.push(L.circle([lat, lng], { radius: r, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map));
+      });
+      userMarker = L.circleMarker([lat, lng], {
+        radius: 9, color: '#fff', weight: 2, fillColor: '#00f2fe', fillOpacity: 1
+      }).addTo(map).bindPopup('Vous êtes ici');
+
+      if (typeof REPERTOIRE_GISEMENTS !== 'undefined') {
+        REPERTOIRE_GISEMENTS.forEach(g => {
+          marqueursGis.push(L.circleMarker([g.lat, g.lng], {
+            radius: 7, color: '#fff', weight: 1, fillColor: '#b83b5e', fillOpacity: 0.9
+          }).addTo(map).bindPopup('<b>' + g.nom + '</b><br>' + (g.details || '')));
         });
+      }
+      map.invalidateSize();
+    } catch (e) {
+      console.log('Erreur carte : ' + e.message);
+      carteEnCours = false;
+    }
+  }, 100);
+}
 
-        function calculerDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371; 
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-                      Math.sin(dLon/2) * Math.sin(dLon/2);
-            return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
-        }
+function majCarte(lat, lng) {
+  if (userMarker) userMarker.setLatLng([lat, lng]);
+  cercles.forEach(c => c.setLatLng([lat, lng]));
+}
 
-        function onLocationSuccess(position) {
-            positionRecueUneFois = true;
-            if (watchdogTimer !== null) clearTimeout(watchdogTimer);
-            
-            updateStatus(useHighAccuracy ? 'GPS Haute Précision' : 'Position Réseau (OK)', 'active');
-            
-            const lat = position.coords.latitude;
-            const lng = position.coords.longitude;
-            const accuracy = position.coords.accuracy;
-            
-            document.getElementById('coordsAffichage').textContent = lat.toFixed(4) + " , " + lng.toFixed(4);
-            document.getElementById('acc').textContent = accuracy.toFixed(0) + ' m';
+function genererAffichageGisements(lat, lng) {
+  const ul = document.getElementById('listeGisements');
+  if (!ul || typeof REPERTOIRE_GISEMENTS === 'undefined') return;
+  const liste = REPERTOIRE_GISEMENTS
+    .map(g => ({ g: g, d: calculerDistance(lat, lng, g.lat, g.lng) }))
+    .sort((a, b) => a.d - b.d);
+  ul.innerHTML = liste.map(x =>
+    '<li class="gisement-item">' +
+    '<span class="gisement-name">' + x.g.nom + '</span>' +
+    '<span class="gisement-dist">' + x.d.toFixed(1) + ' km</span>' +
+    '<div class="gisement-desc">' + (x.g.details || '') + '</div></li>').join('');
+}
 
-            // Initialisation et rendu de l'affichage cartographique asynchrone
-            if (!map && typeof L !== 'undefined') {
-                try {
-                    setTimeout(() => {
-                        if (map) return;
-                        
-                        map = L.map('map', { 
-                            zoomControl: true,
-                            attributionControl: false 
-                        }).setView([lat, lng], 11);
-
-                        // Cercles concentriques de distance
-                        L.circle([lat, lng], { radius: 2000, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map);
-                        L.circle([lat, lng], { radius: 5000, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map);
-                        L.circle([lat, lng], { radius: 10000, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map);
-
-                        actualiserMarqueursRadar(lat, lng);
-                    }, 50);
-                } catch (e) {
-                    console.log("Erreur d'initialisation de la carte : " + e.message);
-                }
-            } else if (map) {
-                if (userMarker) userMarker.setLatLng([lat, lng]);
-            }
-
-            genererAffichageGisements(lat, lng);
-        }
-
-        function actualiserMarqueursRadar(myLat, myLng) {
-            if (typeof REPERTOIRE_GISEMENTS === 'undefined' || !map) return;
-
-            if (!userMarker) {
-                userMarker = L.circleMarker([myLat, myLng], {
-                    radius: 9,
-                    color: '#ffffff',
-                    weight: 2,
-                    fillColor: '#00f2fe',
-                    fillOpacity: 1
-                }).addTo(map).bindPopup("Vous êtes ici");
-            }
-
-            REPERTOIRE_GISEMENTS.forEach(g => {
-                const distanceGis = calculerDistance(myLat, myLng, g.lat, g.lng);
+function onLocationError(err) {
+  if (positionRecue) return; // une position valide existe déjà, on ignore
+  const msgs = { 1: 'Permission refusée', 2: 'Position indisponible', 3: 'Délai dépassé' };
+  updateStatus(msgs[err.code] || 'Erreur GPS', 'searching');
+  console.log('Geoloc erreur ' + err.code + ' : ' + err.message);
+}
+</script>
+</body>
+</html>
