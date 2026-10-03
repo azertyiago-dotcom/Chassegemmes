@@ -14,9 +14,11 @@
 
     <preference name="LogLevel" value="DEBUG" />
     <preference name="AndroidXEnabled" value="true" />
+    <preference name="Orientation" value="portrait" />
 
     <platform name="android">
         <allow-intent href="market:*" />
+        <allow-intent href="geo:*" />
         <preference name="android-minSdkVersion" value="22" />
         <preference name="android-targetSdkVersion" value="33" />
 
