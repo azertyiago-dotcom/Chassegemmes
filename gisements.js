@@ -83,6 +83,11 @@ const REPERTOIRE_GISEMENTS = [
         details: "⚠ Zone approx. Quartz incolore légèrement fumé sur granodiorite. Parc national proche."
     },
     {
+        nom: "Col du Soulor (64/65)",
+        lat: 42.97, lng: -0.30, type: "mineral",
+        details: "⚠ Zone approx. Quartz incolore légèrement fumé sur granodiorite (ancienne tranchée sur chemin forestier au-dessus du col, source forum). Pyrite, grenat, quartz rose : observations terrain, non confirmées par les sources. Parc national proche."
+    },
+    {
         nom: "Massif du Néouvielle (65)",
         lat: 42.80, lng: 0.10, type: "mineral",
         details: "Axinite, préhnite, quartz, épidote. RÉSERVE NATURELLE : prélèvement INTERDIT."
