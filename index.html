@@ -30,6 +30,10 @@ h1{color:#00f2fe;margin:0;text-transform:uppercase;font-size:16px}
 .modal .btns{display:flex;gap:8px;margin-top:10px}
 .modal button{flex:1;padding:9px;border:0;border-radius:4px;font-size:14px;font-weight:bold;background:#4facfe;color:#0f172a}
 .modal button.sec{background:#1f4068;color:#e2e2e2}
+#guide{display:none;position:absolute;left:8px;right:8px;top:calc(55vh - 72px);z-index:900;background:rgba(22,36,71,.96);border:1px solid #00f2fe;border-radius:8px;padding:6px 10px;align-items:center;gap:10px;font-size:13px}
+#guide.actif{display:flex}
+#gFleche{font-size:30px;color:#00f2fe;transition:transform .3s;width:36px;text-align:center}
+#guide button{margin-left:auto;background:#b83b5e;color:#fff;border:0;border-radius:4px;padding:6px 10px}
 .gisement-title{color:#4facfe;font-size:13px;font-weight:bold;text-transform:uppercase;margin-bottom:5px}
 .gisements-list{flex:1;margin:0;padding:0;list-style:none;overflow-y:auto}
 .gisement-item{background:#111b30;border-left:4px solid #b83b5e;margin-bottom:5px;padding:8px 10px;border-radius:0 4px 4px 0;font-size:13px}
@@ -66,6 +70,7 @@ h1{color:#00f2fe;margin:0;text-transform:uppercase;font-size:16px}
   </div>
 </div>
 
+<div id="guide"><div id="gFleche">⬆</div><div id="gTexte"></div><button onclick="arreterGuidage()">✖</button></div>
 <div id="overlay"><div class="modal" id="modal"></div></div>
 
 <script src="gisements.js"></script>
@@ -109,6 +114,7 @@ function demarrerApplication() {
   if (systemeDemarre) return;
   systemeDemarre = true;
   lancerSuiviGPS();
+  demarrerBoussole();
 }
 
 // Deux suivis en parallèle : réseau/Wi-Fi (rapide) + GPS (précis)
@@ -151,7 +157,9 @@ function onPosition(position, source) {
   const lng = position.coords.longitude;
   const acc = position.coords.accuracy;
   if (lat == null || lng == null) return;
-  positionActuelle = { lat: lat, lng: lng, acc: acc || 0, source: source };
+  positionActuelle = { lat: lat, lng: lng, acc: acc || 0, source: source,
+                       heading: position.coords.heading, speed: position.coords.speed };
+  majGuidage();
 
   document.getElementById('coordsAffichage').textContent = lat.toFixed(4) + ' , ' + lng.toFixed(4);
   document.getElementById('acc').textContent = (acc != null ? acc.toFixed(0) : '--') + ' m';
@@ -179,6 +187,7 @@ function initCarte(lat, lng) {
       // Fond de carte (uniquement si réseau ; sinon le fond bleu nuit reste)
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, opacity: 0.55 }).addTo(map);
       ajouterBoutons();
+      ajouterBoussole();
       map.invalidateSize();
       cadrerProches(3);
     } catch (e) {
@@ -193,19 +202,151 @@ function majCarte(lat, lng) {
   cercles.forEach(c => c.setLatLng([lat, lng]));
 }
 
+function bouton(txt, fn) {
+  const b = document.createElement('button');
+  b.textContent = txt;
+  b.style.cssText = 'padding:6px 8px;border:0;border-radius:4px;background:#4facfe;color:#0f172a;font-weight:bold;font-size:13px';
+  b.addEventListener('click', fn);
+  return b;
+}
+
 function creerMarqueur(g) {
   const t = TYPES[typeGis(g)];
-  let html = '<b>' + (g.perso ? '★ ' : '') + esc(g.nom) + '</b> (' + t.label + ')<br>' + esc(g.details);
-  if (g.perso) {
-    html += '<br><small>' + esc(g.date) + ' · ±' + g.acc + ' m</small><br>' +
-            '<button onclick="supprimerPerso(' + g.id + ')">🗑 Supprimer</button>';
-  }
   const m = L.circleMarker([g.lat, g.lng], {
     radius: g.perso ? 9 : 7, color: g.perso ? '#00f2fe' : '#fff', weight: g.perso ? 3 : 1,
     fillColor: t.color, fillOpacity: 0.9
-  }).addTo(map).bindPopup(html);
+  }).addTo(map);
+  m.bindPopup(function () {
+    const d = document.createElement('div');
+    d.innerHTML = '<b>' + (g.perso ? '★ ' : '') + esc(g.nom) + '</b> (' + t.label + ')<br>' + esc(g.details) +
+      (g.perso ? '<br><small>' + esc(g.date) + ' · ±' + g.acc + ' m</small>' : '');
+    const bar = document.createElement('div');
+    bar.style.cssText = 'margin-top:8px;display:flex;gap:6px;flex-wrap:wrap';
+    bar.appendChild(bouton('🧭 Guider', function () { guiderVers(g); m.closePopup(); }));
+    bar.appendChild(bouton('🚗 Route', function () { ouvrirItineraire(g); }));
+    if (g.perso) bar.appendChild(bouton('🗑', function () { supprimerPerso(g.id); }));
+    d.appendChild(bar);
+    return d;
+  });
   if (filtreType !== 'tous' && typeGis(g) !== filtreType) map.removeLayer(m);
   return m;
+}
+
+// ---------- Guidage vers un gisement ----------
+let cible = null, ligneGuide = null;
+let capBoussole = null, dernierMajBoussole = 0;
+
+// ---------- Boussole (capteur magnétique du téléphone, sans plugin) ----------
+function capDepuisOrientation(alpha, beta, gamma) {
+  // Formule W3C : cap corrigé de l'inclinaison du téléphone (à plat ou tenu droit)
+  const r = Math.PI / 180, a = alpha * r, b = beta * r, g = gamma * r;
+  const cA = Math.cos(a), sA = Math.sin(a), cB = Math.cos(b), sB = Math.sin(b), cG = Math.cos(g), sG = Math.sin(g);
+  const rA = -cA * sG - sA * sB * cG;
+  const rB = -sA * sG + cA * sB * cG;
+  let h = Math.atan(rA / rB);
+  if (rB < 0) h += Math.PI; else if (rA < 0) h += 2 * Math.PI;
+  return (h / r + 360) % 360;
+}
+
+function lisserAngle(ancien, nouveau, k) {
+  const diff = ((nouveau - ancien + 540) % 360) - 180;
+  return (ancien + diff * k + 360) % 360;
+}
+
+function demarrerBoussole() {
+  const gestion = function (e) {
+    if (e.alpha == null) return;
+    let cap = null;
+    if (e.webkitCompassHeading != null) cap = e.webkitCompassHeading;
+    else if (e.absolute === true || e.type === 'deviceorientationabsolute') cap = capDepuisOrientation(e.alpha, e.beta, e.gamma);
+    if (cap == null || isNaN(cap)) return;
+    capBoussole = capBoussole == null ? cap : lisserAngle(capBoussole, cap, 0.25);
+    const now = Date.now();
+    if (now - dernierMajBoussole < 120) return; // limite la fréquence d'affichage
+    dernierMajBoussole = now;
+    rafraichirBoussole();
+  };
+  window.addEventListener('deviceorientationabsolute', gestion, true);
+  window.addEventListener('deviceorientation', gestion, true);
+}
+
+function rafraichirBoussole() {
+  if (capBoussole == null) return;
+  const a = document.getElementById('bAiguille'), t = document.getElementById('bCap');
+  if (a) a.style.transform = 'rotate(' + (-capBoussole) + 'deg)';
+  if (t) t.textContent = Math.round(capBoussole) + '° ' + pointCardinal(capBoussole);
+  majGuidage();
+}
+
+function ajouterBoussole() {
+  const C = L.Control.extend({
+    options: { position: 'topleft' },
+    onAdd: function () {
+      const d = L.DomUtil.create('div');
+      d.style.cssText = 'width:62px;height:62px;border-radius:50%;background:rgba(22,36,71,.92);border:2px solid #4facfe;position:relative;color:#fff;margin-top:6px';
+      d.innerHTML =
+        '<div id="bAiguille" style="position:absolute;left:0;top:0;width:100%;height:100%;transition:transform .12s">' +
+        '<div style="text-align:center;color:#ff5a5a;font-weight:bold;font-size:12px;line-height:14px">N</div>' +
+        '<div style="position:absolute;left:50%;top:14px;margin-left:-4px;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:12px solid #ff5a5a"></div></div>' +
+        '<div id="bCap" style="position:absolute;left:0;right:0;top:50%;margin-top:-5px;text-align:center;font-family:monospace;font-size:10px;color:#00f2fe">--</div>';
+      L.DomEvent.disableClickPropagation(d);
+      return d;
+    }
+  });
+  map.addControl(new C());
+}
+
+function calculerCap(lat1, lon1, lat2, lon2) {
+  const r = Math.PI / 180;
+  const y = Math.sin((lon2 - lon1) * r) * Math.cos(lat2 * r);
+  const x = Math.cos(lat1 * r) * Math.sin(lat2 * r) -
+            Math.sin(lat1 * r) * Math.cos(lat2 * r) * Math.cos((lon2 - lon1) * r);
+  return (Math.atan2(y, x) / r + 360) % 360;
+}
+function pointCardinal(b) { return ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'][Math.round(b / 45) % 8]; }
+
+function guiderVers(g) {
+  cible = g;
+  document.getElementById('guide').className = 'actif';
+  if (!positionActuelle) document.getElementById('gTexte').textContent = 'En attente de position...';
+  majGuidage();
+}
+
+function arreterGuidage() {
+  cible = null;
+  if (ligneGuide && map) { map.removeLayer(ligneGuide); }
+  ligneGuide = null;
+  document.getElementById('guide').className = '';
+}
+
+function majGuidage() {
+  if (!cible || !positionActuelle) return;
+  const p = positionActuelle;
+  const dKm = calculerDistance(p.lat, p.lng, cible.lat, cible.lng);
+  const cap = calculerCap(p.lat, p.lng, cible.lat, cible.lng);
+  const dTxt = dKm < 1 ? Math.round(dKm * 1000) + ' m' : dKm.toFixed(1) + ' km';
+  const enMarche = p.heading != null && !isNaN(p.heading) && p.speed > 0.7;
+  let rot, mode;
+  if (capBoussole != null) { rot = (cap - capBoussole + 360) % 360; mode = 'devant vous (boussole)'; }
+  else if (enMarche) { rot = (cap - p.heading + 360) % 360; mode = 'devant vous (GPS)'; }
+  else { rot = cap; mode = 'Nord en haut'; }
+  const arrive = dKm * 1000 < Math.max(30, p.acc);
+  const fl = document.getElementById('gFleche');
+  fl.style.transform = 'rotate(' + rot + 'deg)';
+  fl.style.color = (mode !== 'Nord en haut' && (rot < 15 || rot > 345)) ? '#00ff88' : '#00f2fe';
+  document.getElementById('gTexte').innerHTML = '<b>' + esc(cible.nom) + '</b><br>' +
+    (arrive ? '🎯 Vous êtes dans la zone' : dTxt + ' · cap ' + Math.round(cap) + '° ' + pointCardinal(cap)) +
+    '<br><small>' + 'Flèche : ' + mode + ' · à vol d’oiseau</small>';
+  if (map) {
+    const pts = [[p.lat, p.lng], [cible.lat, cible.lng]];
+    if (!ligneGuide) ligneGuide = L.polyline(pts, { color: '#00f2fe', weight: 3, dashArray: '6,8' }).addTo(map);
+    else ligneGuide.setLatLngs(pts);
+  }
+}
+
+function ouvrirItineraire(g) {
+  // Ouvre l'application de navigation du téléphone (Google Maps, OsmAnd, Organic Maps...)
+  window.location.href = 'geo:' + g.lat + ',' + g.lng + '?q=' + g.lat + ',' + g.lng + '(' + encodeURIComponent(g.nom) + ')';
 }
 
 function ouvrirModal(html) {
@@ -253,6 +394,7 @@ function enregistrerPoint() {
 function supprimerPerso(id) {
   if (!confirm('Supprimer ce point ?')) return;
   ecrirePerso(lirePerso().filter(x => x.id !== id));
+  if (cible && cible.id === id) arreterGuidage();
   const idx = REPERTOIRE_GISEMENTS.findIndex(x => x.id === id);
   if (idx >= 0) {
     REPERTOIRE_GISEMENTS.splice(idx, 1);
