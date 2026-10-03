@@ -13,7 +13,7 @@ jobs:
     - name: Récupération du code
       uses: actions/checkout@v4
 
-    - name: Configuration de l'environnement Java (Outils Android)
+    - name: Configuration de l'environnement Java
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
@@ -35,72 +35,64 @@ jobs:
       with:
         node-version: '18'
 
-    - name: Installation globale de Cordova
-      run: npm install -g cordova
+    - name: Installation de Cordova
+      run: npm install -g cordova@12
 
-    # NOUVELLE ÉTAPE CRITIQUE : Téléchargement des fichiers de la carte en local pour le build
-    - name: Téléchargement sécurisé des fichiers Leaflet locaux
+    - name: Téléchargement des fichiers Leaflet locaux
       run: |
-        curl -s https://cloudflare.com -o leaflet.js
-        curl -s https://cloudflare.com -o leaflet.css
+        curl -fsSL https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js -o leaflet.js
+        curl -fsSL https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css -o leaflet.css
+        echo "=== Vérification Leaflet ==="
+        ls -la leaflet.js leaflet.css
+        head -c 120 leaflet.js; echo
+        test $(stat -c%s leaflet.js) -gt 100000 || { echo "ERREUR : leaflet.js invalide"; exit 1; }
 
-    - name: Structure des dossiers et création du projet natif Android
+    - name: Création du projet Cordova et injection des fichiers
       run: |
-        # Nettoyage préventif des builds précédents
         rm -rf appli_native
-        
-        # 1. Création de l'architecture officielle Cordova avec le bon Package ID
         cordova create appli_native com.gemmespro.app "GemmesPro"
-        
-        # 2. Copie du fichier de configuration global validé
         cp config.xml appli_native/config.xml
-        
-        # 3. Sécurité : Nettoyage du dossier www généré par défaut pour éviter les conflits
+
         rm -f appli_native/www/index.html
-        rm -rf appli_native/www/js
-        rm -rf appli_native/www/css
-        rm -rf appli_native/www/img
-        
-        # 4. Injection intelligente et sécurisée de VOS fichiers de prospection
+        rm -rf appli_native/www/js appli_native/www/css appli_native/www/img
+
         if [ -d "www" ]; then
+          echo ">>> Source utilisée : dossier www/"
           cp -r www/* appli_native/www/
-          # Si le dossier www existe, on y glisse aussi les dépendances téléchargées
-          cp leaflet.js appli_native/www/
-          cp leaflet.css appli_native/www/
         else
+          echo ">>> Source utilisée : fichiers à la racine"
           cp index.html appli_native/www/
           cp gisements.js appli_native/www/
-          cp leaflet.js appli_native/www/  # Injection du fichier JS de la carte
-          cp leaflet.css appli_native/www/ # Injection du fichier CSS des styles
           cp -r css appli_native/www/ 2>/dev/null || true
           cp -r js appli_native/www/ 2>/dev/null || true
           cp -r img appli_native/www/ 2>/dev/null || true
         fi
-        
-        echo "=== VÉRIFICATION DU DOSSIER WWW AVANT COMPILATION ==="
+        cp leaflet.js appli_native/www/
+        cp leaflet.css appli_native/www/
+
+        echo "=== CONTENU DE WWW ==="
         ls -la appli_native/www/
-        
+
         cd appli_native
         cordova platform add android@12.0.0 --verbose
 
-    - name: Installation du plugin Cordova Géolocalisation Officiel
+    - name: Installation du plugin de géolocalisation
       run: |
         cd appli_native
-        cordova plugin add cordova-plugin-geolocation@^5.0.0 --save --verbose
+        cordova plugin add "cordova-plugin-geolocation@^5.0.0" --save --verbose
 
-    - name: Compilation de l'APK Final
+    - name: Compilation de l'APK debug
       run: |
         cd appli_native
         cordova build android --debug --verbose
 
-    - name: Extraction de l'APK vers la racine
+    - name: Extraction de l'APK
       run: |
         mkdir -p output_apk
         find appli_native/platforms/android/app/build/outputs/apk/ -name "*.apk" -exec cp {} output_apk/ \;
-        echo "=== CONTENU DU DOSSIER DE SORTIE ==="
         ls -la output_apk/
 
-    - name: Livraison du fichier APK
+    - name: Livraison de l'APK
       uses: actions/upload-artifact@v4
       with:
         name: Application-Gemmes-Montagne
