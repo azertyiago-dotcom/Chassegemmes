@@ -52,7 +52,7 @@ h1{color:#00f2fe;margin:0;text-transform:uppercase;font-size:16px}
 <script src="cordova.js"></script>
 <script>
 let map = null, userMarker = null, carteEnCours = false;
-let cercles = [], marqueursGis = [];
+let cercles = [], marqueursGis = [], derniereListe = [];
 let systemeDemarre = false, watchReseau = null, watchGPS = null;
 let dernierGPS = 0, positionRecue = false;
 
@@ -135,7 +135,11 @@ function initCarte(lat, lng) {
           }).addTo(map).bindPopup('<b>' + g.nom + '</b><br>' + (g.details || '')));
         });
       }
+      // Fond de carte (uniquement si réseau ; sinon le fond bleu nuit reste)
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, opacity: 0.55 }).addTo(map);
+      ajouterBoutons();
       map.invalidateSize();
+      cadrerProches(3);
     } catch (e) {
       console.log('Erreur carte : ' + e.message);
       carteEnCours = false;
@@ -148,14 +152,56 @@ function majCarte(lat, lng) {
   cercles.forEach(c => c.setLatLng([lat, lng]));
 }
 
+function cadrerProches(n) {
+  if (!map || !userMarker || !derniereListe.length) return;
+  const pts = [userMarker.getLatLng()].concat(
+    derniereListe.slice(0, n).map(x => L.latLng(x.g.lat, x.g.lng)));
+  map.fitBounds(L.latLngBounds(pts), { padding: [30, 30], maxZoom: 13 });
+}
+
+function cadrerTous() {
+  if (!map || !userMarker || typeof REPERTOIRE_GISEMENTS === 'undefined') return;
+  const pts = [userMarker.getLatLng()].concat(
+    REPERTOIRE_GISEMENTS.map(g => L.latLng(g.lat, g.lng)));
+  map.fitBounds(L.latLngBounds(pts), { padding: [30, 30] });
+}
+
+function allerA(i) {
+  if (!map || !marqueursGis[i]) return;
+  map.setView(marqueursGis[i].getLatLng(), 12);
+  marqueursGis[i].openPopup();
+}
+
+function ajouterBoutons() {
+  const Ctl = L.Control.extend({
+    options: { position: 'topright' },
+    onAdd: function () {
+      const d = L.DomUtil.create('div');
+      d.style.cssText = 'display:flex;flex-direction:column;gap:4px';
+      [['📍', function () { if (userMarker) map.setView(userMarker.getLatLng(), 13); }],
+       ['🎯', function () { cadrerProches(3); }],
+       ['🌍', cadrerTous]].forEach(function (b) {
+        const a = L.DomUtil.create('a', '', d);
+        a.innerHTML = b[0]; a.href = '#';
+        a.style.cssText = 'background:#fff;width:34px;height:34px;line-height:34px;text-align:center;font-size:18px;border-radius:4px;text-decoration:none';
+        L.DomEvent.on(a, 'click', function (e) { L.DomEvent.preventDefault(e); b[1](); });
+      });
+      L.DomEvent.disableClickPropagation(d);
+      return d;
+    }
+  });
+  map.addControl(new Ctl());
+}
+
 function genererAffichageGisements(lat, lng) {
   const ul = document.getElementById('listeGisements');
   if (!ul || typeof REPERTOIRE_GISEMENTS === 'undefined') return;
   const liste = REPERTOIRE_GISEMENTS
-    .map(g => ({ g: g, d: calculerDistance(lat, lng, g.lat, g.lng) }))
+    .map((g, i) => ({ g: g, i: i, d: calculerDistance(lat, lng, g.lat, g.lng) }))
     .sort((a, b) => a.d - b.d);
+  derniereListe = liste;
   ul.innerHTML = liste.map(x =>
-    '<li class="gisement-item">' +
+    '<li class="gisement-item" onclick="allerA(' + x.i + ')">' +
     '<span class="gisement-name">' + x.g.nom + '</span>' +
     '<span class="gisement-dist">' + x.d.toFixed(1) + ' km</span>' +
     '<div class="gisement-desc">' + (x.g.details || '') + '</div></li>').join('');
