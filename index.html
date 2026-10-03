@@ -22,6 +22,14 @@ h1{color:#00f2fe;margin:0;text-transform:uppercase;font-size:16px}
 .geo-item{font-family:monospace;color:#00f2fe}
 .geo-item span:first-child{color:#84a9ac;font-family:sans-serif}
 .filtre{background:#111b30;color:#e2e2e2;border:1px solid #4facfe;border-radius:4px;font-size:12px;padding:2px 4px}
+#overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.75);z-index:2000;align-items:center;justify-content:center}
+#overlay.ouvert{display:flex}
+.modal{background:#162447;border:1px solid #4facfe;border-radius:8px;padding:14px;width:86%;max-width:360px;font-size:13px;box-sizing:border-box}
+.modal input,.modal select,.modal textarea{width:100%;box-sizing:border-box;margin-top:6px;background:#111b30;color:#fff;border:1px solid #4facfe;border-radius:4px;padding:7px;font-size:14px;font-family:inherit}
+.modal textarea{height:70px}
+.modal .btns{display:flex;gap:8px;margin-top:10px}
+.modal button{flex:1;padding:9px;border:0;border-radius:4px;font-size:14px;font-weight:bold;background:#4facfe;color:#0f172a}
+.modal button.sec{background:#1f4068;color:#e2e2e2}
 .gisement-title{color:#4facfe;font-size:13px;font-weight:bold;text-transform:uppercase;margin-bottom:5px}
 .gisements-list{flex:1;margin:0;padding:0;list-style:none;overflow-y:auto}
 .gisement-item{background:#111b30;border-left:4px solid #b83b5e;margin-bottom:5px;padding:8px 10px;border-radius:0 4px 4px 0;font-size:13px}
@@ -58,6 +66,8 @@ h1{color:#00f2fe;margin:0;text-transform:uppercase;font-size:16px}
   </div>
 </div>
 
+<div id="overlay"><div class="modal" id="modal"></div></div>
+
 <script src="gisements.js"></script>
 <script src="cordova.js"></script>
 <script>
@@ -71,6 +81,22 @@ const TYPES = {
   mineral: { label: 'Minéral', color: '#b83b5e' }
 };
 function typeGis(g) { return TYPES[g.type] ? g.type : 'mineral'; }
+
+// ---------- Points personnels (sauvegarde locale sur le téléphone) ----------
+const CLE_PERSO = 'gemmespro_perso';
+let positionActuelle = null;
+function esc(t) {
+  return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function lirePerso() {
+  try { return JSON.parse(localStorage.getItem(CLE_PERSO) || '[]'); } catch (e) { return []; }
+}
+function ecrirePerso(arr) {
+  try { localStorage.setItem(CLE_PERSO, JSON.stringify(arr)); return true; } catch (e) { return false; }
+}
+if (typeof REPERTOIRE_GISEMENTS !== 'undefined') {
+  lirePerso().forEach(p => REPERTOIRE_GISEMENTS.push(p));
+}
 let systemeDemarre = false, watchReseau = null, watchGPS = null;
 let dernierGPS = 0, positionRecue = false;
 
@@ -125,6 +151,7 @@ function onPosition(position, source) {
   const lng = position.coords.longitude;
   const acc = position.coords.accuracy;
   if (lat == null || lng == null) return;
+  positionActuelle = { lat: lat, lng: lng, acc: acc || 0, source: source };
 
   document.getElementById('coordsAffichage').textContent = lat.toFixed(4) + ' , ' + lng.toFixed(4);
   document.getElementById('acc').textContent = (acc != null ? acc.toFixed(0) : '--') + ' m';
@@ -147,11 +174,7 @@ function initCarte(lat, lng) {
       }).addTo(map).bindPopup('Vous êtes ici');
 
       if (typeof REPERTOIRE_GISEMENTS !== 'undefined') {
-        REPERTOIRE_GISEMENTS.forEach(g => {
-          marqueursGis.push(L.circleMarker([g.lat, g.lng], {
-            radius: 7, color: '#fff', weight: 1, fillColor: TYPES[typeGis(g)].color, fillOpacity: 0.9
-          }).addTo(map).bindPopup('<b>' + g.nom + '</b> (' + TYPES[typeGis(g)].label + ')<br>' + (g.details || '')));
-        });
+        REPERTOIRE_GISEMENTS.forEach(g => marqueursGis.push(creerMarqueur(g)));
       }
       // Fond de carte (uniquement si réseau ; sinon le fond bleu nuit reste)
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, opacity: 0.55 }).addTo(map);
@@ -168,6 +191,92 @@ function initCarte(lat, lng) {
 function majCarte(lat, lng) {
   if (userMarker) userMarker.setLatLng([lat, lng]);
   cercles.forEach(c => c.setLatLng([lat, lng]));
+}
+
+function creerMarqueur(g) {
+  const t = TYPES[typeGis(g)];
+  let html = '<b>' + (g.perso ? '★ ' : '') + esc(g.nom) + '</b> (' + t.label + ')<br>' + esc(g.details);
+  if (g.perso) {
+    html += '<br><small>' + esc(g.date) + ' · ±' + g.acc + ' m</small><br>' +
+            '<button onclick="supprimerPerso(' + g.id + ')">🗑 Supprimer</button>';
+  }
+  const m = L.circleMarker([g.lat, g.lng], {
+    radius: g.perso ? 9 : 7, color: g.perso ? '#00f2fe' : '#fff', weight: g.perso ? 3 : 1,
+    fillColor: t.color, fillOpacity: 0.9
+  }).addTo(map).bindPopup(html);
+  if (filtreType !== 'tous' && typeGis(g) !== filtreType) map.removeLayer(m);
+  return m;
+}
+
+function ouvrirModal(html) {
+  document.getElementById('modal').innerHTML = html;
+  document.getElementById('overlay').className = 'ouvert';
+}
+function fermerModal() { document.getElementById('overlay').className = ''; }
+
+function ouvrirFormulaire() {
+  const p = positionActuelle;
+  if (!p) { alert('Position non disponible : attendez le signal.'); return; }
+  const opts = Object.keys(TYPES).map(k => '<option value="' + k + '">' + TYPES[k].label + '</option>').join('');
+  ouvrirModal(
+    '<b style="color:#00f2fe">➕ Marquer ce point</b>' +
+    '<div style="margin:6px 0;font-family:monospace;color:#00f2fe">' + p.lat.toFixed(5) + ' , ' + p.lng.toFixed(5) +
+    ' (±' + Math.round(p.acc) + ' m)</div>' +
+    (p.acc > 50 ? '<div style="color:#f59e0b">⚠ Précision faible (' + (p.source === 'gps' ? 'GPS' : 'réseau') +
+      '). Attendez le GPS pour un point plus exact.</div>' : '') +
+    '<input id="pNom" placeholder="Minéral / nom du lieu" />' +
+    '<select id="pType">' + opts + '</select>' +
+    '<textarea id="pNotes" placeholder="Notes (couleur, taille, accès...)"></textarea>' +
+    '<div class="btns"><button class="sec" onclick="fermerModal()">Annuler</button>' +
+    '<button onclick="enregistrerPoint()">Enregistrer</button></div>');
+}
+
+function enregistrerPoint() {
+  const p = positionActuelle;
+  if (!p) return;
+  const g = {
+    id: Date.now(), perso: true,
+    nom: document.getElementById('pNom').value.trim() || 'Point sans nom',
+    type: document.getElementById('pType').value,
+    details: document.getElementById('pNotes').value.trim(),
+    lat: +p.lat.toFixed(6), lng: +p.lng.toFixed(6),
+    date: new Date().toLocaleDateString('fr-FR'), acc: Math.round(p.acc)
+  };
+  const arr = lirePerso(); arr.push(g);
+  if (!ecrirePerso(arr)) alert('Sauvegarde impossible sur ce téléphone.');
+  REPERTOIRE_GISEMENTS.push(g);
+  if (map && marqueursGis.length === REPERTOIRE_GISEMENTS.length - 1) marqueursGis.push(creerMarqueur(g));
+  genererAffichageGisements(derniereLat !== null ? derniereLat : p.lat, derniereLng !== null ? derniereLng : p.lng);
+  fermerModal();
+}
+
+function supprimerPerso(id) {
+  if (!confirm('Supprimer ce point ?')) return;
+  ecrirePerso(lirePerso().filter(x => x.id !== id));
+  const idx = REPERTOIRE_GISEMENTS.findIndex(x => x.id === id);
+  if (idx >= 0) {
+    REPERTOIRE_GISEMENTS.splice(idx, 1);
+    if (marqueursGis[idx]) { if (map) map.removeLayer(marqueursGis[idx]); marqueursGis.splice(idx, 1); }
+  }
+  if (map) map.closePopup();
+  if (derniereLat !== null) genererAffichageGisements(derniereLat, derniereLng);
+}
+
+function ouvrirExport() {
+  const arr = lirePerso();
+  if (!arr.length) { alert('Aucun point personnel enregistré.'); return; }
+  const txt = '// À coller dans gisements.js, avant la ligne finale "];"\n' +
+    arr.map(x => '    ' + JSON.stringify({ nom: x.nom, lat: x.lat, lng: x.lng, type: x.type,
+      details: (x.details ? x.details + ' ' : '') + '(point terrain ' + x.date + ', ±' + x.acc + ' m)' }) + ',').join('\n');
+  ouvrirModal('<b style="color:#00f2fe">📤 Mes points (' + arr.length + ')</b>' +
+    '<textarea id="pExport" style="height:150px;font-size:11px;font-family:monospace" readonly>' + esc(txt) + '</textarea>' +
+    '<div class="btns"><button class="sec" onclick="fermerModal()">Fermer</button>' +
+    '<button onclick="copierExport()">Copier</button></div>');
+}
+function copierExport() {
+  const t = document.getElementById('pExport');
+  t.select();
+  try { document.execCommand('copy'); alert('Copié.'); } catch (e) { alert('Sélectionnez et copiez le texte manuellement.'); }
 }
 
 function changerFiltre(v) {
@@ -208,7 +317,9 @@ function ajouterBoutons() {
       d.style.cssText = 'display:flex;flex-direction:column;gap:4px';
       [['📍', function () { if (userMarker) map.setView(userMarker.getLatLng(), 13); }],
        ['🎯', function () { cadrerProches(3); }],
-       ['🌍', cadrerTous]].forEach(function (b) {
+       ['🌍', cadrerTous],
+       ['➕', ouvrirFormulaire],
+       ['📤', ouvrirExport]].forEach(function (b) {
         const a = L.DomUtil.create('a', '', d);
         a.innerHTML = b[0]; a.href = '#';
         a.style.cssText = 'background:#fff;width:34px;height:34px;line-height:34px;text-align:center;font-size:18px;border-radius:4px;text-decoration:none';
@@ -232,9 +343,9 @@ function genererAffichageGisements(lat, lng) {
   derniereListe = liste;
   ul.innerHTML = liste.map(x =>
     '<li class="gisement-item" style="border-left-color:' + TYPES[typeGis(x.g)].color + '" onclick="allerA(' + x.i + ')">' +
-    '<span class="gisement-name">' + x.g.nom + '</span>' +
+    '<span class="gisement-name">' + (x.g.perso ? '★ ' : '') + esc(x.g.nom) + '</span>' +
     '<span class="gisement-dist">' + x.d.toFixed(1) + ' km</span>' +
-    '<div class="gisement-desc">' + TYPES[typeGis(x.g)].label + ' · ' + (x.g.details || '') + '</div></li>').join('');
+    '<div class="gisement-desc">' + TYPES[typeGis(x.g)].label + ' · ' + esc(x.g.details) + '</div></li>').join('');
 }
 
 function onLocationError(err) {
