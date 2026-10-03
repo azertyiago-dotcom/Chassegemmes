@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: gap:">
+<meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: gap: blob:">
 <title>Gemmes Pro - Radar</title>
 <link rel="stylesheet" href="leaflet.css" />
 <script src="leaflet.js"></script>
@@ -34,6 +34,8 @@ h1{color:#00f2fe;margin:0;text-transform:uppercase;font-size:16px}
 #guide.actif{display:flex}
 #gFleche{font-size:30px;color:#00f2fe;transition:transform .3s;width:36px;text-align:center}
 #guide button{margin-left:auto;background:#b83b5e;color:#fff;border:0;border-radius:4px;padding:6px 10px}
+#toast{display:none;position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:3000;background:rgba(0,0,0,.88);color:#fff;border:1px solid #00f2fe;border-radius:18px;padding:8px 14px;font-size:13px;max-width:88%;text-align:center}
+#toast.visible{display:block}
 .gisement-title{color:#4facfe;font-size:13px;font-weight:bold;text-transform:uppercase;margin-bottom:5px}
 .gisements-list{flex:1;margin:0;padding:0;list-style:none;overflow-y:auto}
 .gisement-item{background:#111b30;border-left:4px solid #b83b5e;margin-bottom:5px;padding:8px 10px;border-radius:0 4px 4px 0;font-size:13px}
@@ -71,6 +73,7 @@ h1{color:#00f2fe;margin:0;text-transform:uppercase;font-size:16px}
 </div>
 
 <div id="guide"><div id="gFleche">⬆</div><div id="gTexte"></div><button onclick="arreterGuidage()">✖</button></div>
+<div id="toast"></div>
 <div id="overlay"><div class="modal" id="modal"></div></div>
 
 <script src="gisements.js"></script>
@@ -115,6 +118,7 @@ function demarrerApplication() {
   systemeDemarre = true;
   lancerSuiviGPS();
   demarrerBoussole();
+  appliquerEcranAllume();
 }
 
 // Deux suivis en parallèle : réseau/Wi-Fi (rapide) + GPS (précis)
@@ -160,6 +164,7 @@ function onPosition(position, source) {
   positionActuelle = { lat: lat, lng: lng, acc: acc || 0, source: source,
                        heading: position.coords.heading, speed: position.coords.speed };
   majGuidage();
+  verifierProximite(positionActuelle);
 
   document.getElementById('coordsAffichage').textContent = lat.toFixed(4) + ' , ' + lng.toFixed(4);
   document.getElementById('acc').textContent = (acc != null ? acc.toFixed(0) : '--') + ' m';
@@ -173,7 +178,8 @@ function initCarte(lat, lng) {
   carteEnCours = true;
   setTimeout(() => {
     try {
-      map = L.map('map', { zoomControl: true, attributionControl: false }).setView([lat, lng], 11);
+      map = L.map('map', { zoomControl: true, attributionControl: true }).setView([lat, lng], 11);
+      map.attributionControl.setPrefix(false);
       [2000, 5000, 10000].forEach(r => {
         cercles.push(L.circle([lat, lng], { radius: r, color: '#4facfe', weight: 1, fill: false, dashArray: '5, 5' }).addTo(map));
       });
@@ -185,9 +191,10 @@ function initCarte(lat, lng) {
         REPERTOIRE_GISEMENTS.forEach(g => marqueursGis.push(creerMarqueur(g)));
       }
       // Fond de carte (uniquement si réseau ; sinon le fond bleu nuit reste)
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, opacity: 0.55 }).addTo(map);
+      new TuilesHorsLigne(URL_PLAN, { maxZoom: 18, maxNativeZoom: 18, opacity: 0.85, attribution: 'Carte © IGN/Géoplateforme' }).addTo(map);
       ajouterBoutons();
       ajouterBoussole();
+      majBoutonsEtat();
       map.invalidateSize();
       cadrerProches(3);
     } catch (e) {
@@ -421,6 +428,228 @@ function copierExport() {
   try { document.execCommand('copy'); alert('Copié.'); } catch (e) { alert('Sélectionnez et copiez le texte manuellement.'); }
 }
 
+// ---------- Utilitaires : message flottant, vibreur ----------
+let toastTimer = null;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg; t.className = 'visible';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { t.className = ''; }, 4000);
+}
+function vibrer(motif) { try { if (navigator.vibrate) navigator.vibrate(motif); } catch (e) {} }
+
+// ---------- Écran toujours allumé ----------
+let ecranAllume = (function () { try { return localStorage.getItem('gp_ecran') !== '0'; } catch (e) { return true; } })();
+let wakeLockObj = null;
+function appliquerEcranAllume() {
+  try {
+    if (window.plugins && window.plugins.insomnia) {
+      if (ecranAllume) window.plugins.insomnia.keepAwake(); else window.plugins.insomnia.allowSleepAgain();
+    } else if (navigator.wakeLock) {
+      if (ecranAllume) navigator.wakeLock.request('screen').then(function (l) { wakeLockObj = l; }).catch(function () {});
+      else if (wakeLockObj) { wakeLockObj.release(); wakeLockObj = null; }
+    }
+  } catch (e) {}
+}
+document.addEventListener('visibilitychange', function () { if (!document.hidden && ecranAllume) appliquerEcranAllume(); });
+function basculerEcran() {
+  ecranAllume = !ecranAllume;
+  try { localStorage.setItem('gp_ecran', ecranAllume ? '1' : '0'); } catch (e) {}
+  appliquerEcranAllume(); majBoutonsEtat();
+  toast(ecranAllume ? '💡 Écran maintenu allumé' : '💡 Mise en veille normale');
+}
+
+// ---------- Alertes de proximité par vibreur ----------
+const RAYONS = [0, 100, 300, 1000];
+let rayonAlerte = (function () {
+  try { const v = parseInt(localStorage.getItem('gp_rayon')); return RAYONS.indexOf(v) >= 0 ? v : 300; } catch (e) { return 300; }
+})();
+let etatProche = {}, etatArrive = {};
+function changerAlerte() {
+  rayonAlerte = RAYONS[(RAYONS.indexOf(rayonAlerte) + 1) % RAYONS.length];
+  try { localStorage.setItem('gp_rayon', String(rayonAlerte)); } catch (e) {}
+  etatProche = {}; etatArrive = {};
+  majBoutonsEtat();
+  toast(rayonAlerte ? '🔔 Alerte vibreur à ' + (rayonAlerte >= 1000 ? '1 km' : rayonAlerte + ' m') : '🔕 Alertes désactivées');
+  if (rayonAlerte) vibrer([120]);
+}
+function verifierProximite(p) {
+  if (!rayonAlerte || typeof REPERTOIRE_GISEMENTS === 'undefined') return;
+  if (p.acc > Math.max(60, rayonAlerte)) return; // position trop imprécise : pas d'alerte
+  REPERTOIRE_GISEMENTS.forEach(function (g) {
+    if (filtreType !== 'tous' && typeGis(g) !== filtreType) return;
+    const k = g.id || (g.nom + g.lat);
+    const dm = calculerDistance(p.lat, p.lng, g.lat, g.lng) * 1000;
+    if (dm <= Math.max(30, p.acc)) {
+      if (!etatArrive[k]) { etatArrive[k] = true; etatProche[k] = true; vibrer([500, 150, 500, 150, 500]); toast('🎯 Vous y êtes : ' + g.nom); }
+    } else if (dm <= rayonAlerte) {
+      if (!etatProche[k]) { etatProche[k] = true; vibrer([250, 120, 250]); toast('📍 ' + g.nom + ' à ' + Math.round(dm) + ' m'); }
+    }
+    if (dm > rayonAlerte * 1.5) etatProche[k] = false;
+    if (dm > 100) etatArrive[k] = false;
+  });
+}
+function majBoutonsEtat() {
+  const e = document.getElementById('btnEcran'), a = document.getElementById('btnAlerte');
+  if (e) e.style.opacity = ecranAllume ? '1' : '0.45';
+  if (a) { a.innerHTML = rayonAlerte ? '🔔' : '🔕'; a.style.opacity = rayonAlerte ? '1' : '0.45'; }
+}
+
+// ---------- Fond de carte IGN avec mémoire hors ligne ----------
+const URL_PLAN = 'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0' +
+  '&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM' +
+  '&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}';
+const MAX_TUILES = 4000;
+let dbTuiles = null, dlEnCours = false, dlAnnule = false;
+
+function urlTuile(z, x, y) { return URL_PLAN.replace('{z}', z).replace('{x}', x).replace('{y}', y); }
+
+function ouvrirDB() {
+  return new Promise(function (res) {
+    if (dbTuiles) return res(dbTuiles);
+    try {
+      const rq = indexedDB.open('gemmespro_tuiles', 1);
+      rq.onupgradeneeded = function () { rq.result.createObjectStore('t'); };
+      rq.onsuccess = function () { dbTuiles = rq.result; res(dbTuiles); };
+      rq.onerror = function () { res(null); };
+    } catch (e) { res(null); }
+  });
+}
+function opDB(mode, fn) {
+  return ouvrirDB().then(function (db) {
+    return new Promise(function (res) {
+      if (!db) return res(null);
+      try {
+        const tx = db.transaction('t', mode), st = tx.objectStore('t');
+        const rq = fn(st);
+        tx.oncomplete = function () { res(rq ? rq.result : true); };
+        tx.onerror = function () { res(null); };
+      } catch (e) { res(null); }
+    });
+  });
+}
+function lireTuile(key) { return opDB('readonly', function (st) { return st.get(key); }); }
+function existeTuile(key) { return opDB('readonly', function (st) { return st.count(key); }).then(function (n) { return n > 0; }); }
+function ecrireTuile(key, blob) { return opDB('readwrite', function (st) { return st.put(blob, key); }); }
+function compterTuiles() { return opDB('readonly', function (st) { return st.count(); }).then(function (n) { return n || 0; }); }
+function viderTuiles() { return opDB('readwrite', function (st) { return st.clear(); }); }
+
+const TuilesHorsLigne = (typeof L === 'undefined') ? null : L.TileLayer.extend({
+  createTile: function (coords, done) {
+    const img = document.createElement('img');
+    img.alt = ''; img.setAttribute('role', 'presentation');
+    const url = this.getTileUrl(coords);
+    lireTuile(coords.z + '/' + coords.x + '/' + coords.y).then(function (blob) {
+      if (blob) {
+        const u = URL.createObjectURL(blob);
+        img.onload = function () { URL.revokeObjectURL(u); done(null, img); };
+        img.onerror = function () { done(null, img); };
+        img.src = u;
+      } else {
+        img.onload = function () { done(null, img); };
+        img.onerror = function () { done(null, img); };
+        img.src = url;
+      }
+    });
+    return img;
+  }
+});
+
+function tuileX(lng, z) { return Math.floor((lng + 180) / 360 * Math.pow(2, z)); }
+function tuileY(lat, z) {
+  const r = lat * Math.PI / 180;
+  return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * Math.pow(2, z));
+}
+function listerTuiles(zmax) {
+  const b = map.getBounds(), zmin = Math.max(7, zmax - 5), liste = [];
+  for (let z = zmin; z <= zmax; z++) {
+    const x0 = tuileX(b.getWest(), z), x1 = tuileX(b.getEast(), z);
+    const y0 = tuileY(b.getNorth(), z), y1 = tuileY(b.getSouth(), z);
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
+      liste.push({ z: z, x: x, y: y });
+      if (liste.length > MAX_TUILES) return liste;
+    }
+  }
+  return liste;
+}
+
+function ouvrirCartes() {
+  if (!map) return;
+  ouvrirModal('<b style="color:#00f2fe">📥 Carte hors ligne (IGN)</b>' +
+    '<div style="margin:6px 0;color:#84a9ac">Télécharge la partie <b>visible</b> de la carte. Zoomez d’abord sur votre secteur de prospection, avec du réseau.</div>' +
+    '<select id="dlZoom" onchange="majEstimation()">' +
+    '<option value="13">Moyen (z13)</option><option value="14">Bon (z14)</option>' +
+    '<option value="15" selected>Détaillé (z15)</option><option value="16">Très détaillé (z16)</option></select>' +
+    '<div id="dlInfo" style="margin:8px 0">...</div>' +
+    '<div id="dlCache" style="color:#84a9ac;font-size:12px"></div>' +
+    '<div class="btns"><button class="sec" onclick="fermerModal()">Fermer</button>' +
+    '<button id="dlBtn" onclick="lancerTelechargement()">Télécharger</button></div>' +
+    '<button class="sec" style="margin-top:8px;width:100%" onclick="viderCache()">🗑 Effacer les cartes mémorisées</button>');
+  majEstimation();
+}
+
+function majEstimation() {
+  const sel = document.getElementById('dlZoom');
+  if (!sel || !map || dlEnCours) return;
+  const l = listerTuiles(parseInt(sel.value));
+  const info = document.getElementById('dlInfo'), btn = document.getElementById('dlBtn');
+  if (l.length > MAX_TUILES) {
+    info.textContent = '⚠ Zone trop grande (plus de ' + MAX_TUILES + ' tuiles). Zoomez sur votre secteur ou choisissez moins de détail.';
+    btn.disabled = true;
+  } else {
+    info.textContent = l.length + ' tuiles ≈ ' + Math.max(1, Math.round(l.length * 0.02)) + ' Mo';
+    btn.disabled = false;
+  }
+  compterTuiles().then(function (n) {
+    const el = document.getElementById('dlCache');
+    if (el) el.textContent = 'Déjà en mémoire : ' + n + ' tuiles';
+  });
+}
+
+async function lancerTelechargement() {
+  if (dlEnCours) return;
+  if (!navigator.onLine) { alert('Pas de connexion internet.'); return; }
+  const liste = listerTuiles(parseInt(document.getElementById('dlZoom').value));
+  if (!liste.length || liste.length > MAX_TUILES) return;
+  dlEnCours = true; dlAnnule = false;
+  let i = 0, faits = 0, reussies = 0, erreurs = 0, echecTotal = false;
+  const btn = document.getElementById('dlBtn');
+  btn.textContent = 'Annuler'; btn.onclick = function () { dlAnnule = true; };
+  async function worker() {
+    while (!dlAnnule) {
+      const idx = i++;
+      if (idx >= liste.length) break;
+      const t = liste[idx], key = t.z + '/' + t.x + '/' + t.y;
+      try {
+        if (!(await existeTuile(key))) {
+          const r = await fetch(urlTuile(t.z, t.x, t.y));
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          await ecrireTuile(key, await r.blob());
+        }
+        reussies++;
+      } catch (e) {
+        erreurs++;
+        if (erreurs >= 8 && reussies === 0) { echecTotal = true; dlAnnule = true; }
+      }
+      faits++;
+      const el = document.getElementById('dlInfo');
+      if (el) el.textContent = 'Téléchargement : ' + faits + ' / ' + liste.length + (erreurs ? ' (' + erreurs + ' erreurs)' : '');
+    }
+  }
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  dlEnCours = false;
+  if (echecTotal) toast('⚠ Téléchargement impossible : serveur injoignable ou refus depuis l’application');
+  else if (dlAnnule) toast('Téléchargement annulé (' + reussies + ' tuiles gardées)');
+  else toast('✔ Carte hors ligne prête : ' + reussies + ' tuiles' + (erreurs ? ' (' + erreurs + ' erreurs)' : ''));
+  if (document.getElementById('dlZoom')) ouvrirCartes();
+}
+
+function viderCache() {
+  if (dlEnCours || !confirm('Effacer toutes les cartes mémorisées ?')) return;
+  viderTuiles().then(function () { toast('Cartes effacées'); majEstimation(); });
+}
+
 function changerFiltre(v) {
   filtreType = v;
   if (map) marqueursGis.forEach((m, i) => {
@@ -461,10 +690,13 @@ function ajouterBoutons() {
        ['🎯', function () { cadrerProches(3); }],
        ['🌍', cadrerTous],
        ['➕', ouvrirFormulaire],
-       ['📤', ouvrirExport]].forEach(function (b) {
+       ['📤', ouvrirExport],
+       ['📥', ouvrirCartes],
+       ['💡', basculerEcran, 'btnEcran'],
+       ['🔔', changerAlerte, 'btnAlerte']].forEach(function (b) {
         const a = L.DomUtil.create('a', '', d);
-        a.innerHTML = b[0]; a.href = '#';
-        a.style.cssText = 'background:#fff;width:34px;height:34px;line-height:34px;text-align:center;font-size:18px;border-radius:4px;text-decoration:none';
+        a.innerHTML = b[0]; a.href = '#'; if (b[2]) a.id = b[2];
+        a.style.cssText = 'background:#fff;width:32px;height:32px;line-height:32px;text-align:center;font-size:18px;border-radius:4px;text-decoration:none';
         L.DomEvent.on(a, 'click', function (e) { L.DomEvent.preventDefault(e); b[1](); });
       });
       L.DomEvent.disableClickPropagation(d);
