@@ -21,6 +21,7 @@ h1{color:#00f2fe;margin:0;text-transform:uppercase;font-size:16px}
 .geo-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;font-size:12px;background:#1f4068;padding:6px;border-radius:4px;margin-bottom:8px}
 .geo-item{font-family:monospace;color:#00f2fe}
 .geo-item span:first-child{color:#84a9ac;font-family:sans-serif}
+.filtre{background:#111b30;color:#e2e2e2;border:1px solid #4facfe;border-radius:4px;font-size:12px;padding:2px 4px}
 .gisement-title{color:#4facfe;font-size:13px;font-weight:bold;text-transform:uppercase;margin-bottom:5px}
 .gisements-list{flex:1;margin:0;padding:0;list-style:none;overflow-y:auto}
 .gisement-item{background:#111b30;border-left:4px solid #b83b5e;margin-bottom:5px;padding:8px 10px;border-radius:0 4px 4px 0;font-size:13px}
@@ -41,7 +42,16 @@ h1{color:#00f2fe;margin:0;text-transform:uppercase;font-size:16px}
       <div class="geo-item"><span>Pos: </span><span id="coordsAffichage">Recherche...</span></div>
       <div class="geo-item" style="text-align:right"><span>Précision: </span><span id="acc">--</span></div>
     </div>
-    <div class="gisement-title">📌 Gisements à proximité :</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+      <div class="gisement-title" style="margin:0">📌 Gisements :</div>
+      <select id="filtreType" class="filtre" onchange="changerFiltre(this.value)">
+        <option value="tous">Tous</option>
+        <option value="gemme">💎 Gemmes</option>
+        <option value="metal">🪙 Métaux</option>
+        <option value="mineral">🪨 Minéraux</option>
+        <option value="fossile">🦴 Fossiles</option>
+      </select>
+    </div>
     <ul id="listeGisements" class="gisements-list">
       <li style="text-align:center;color:#84a9ac;padding-top:10px;font-size:12px">En attente de position...</li>
     </ul>
@@ -53,6 +63,14 @@ h1{color:#00f2fe;margin:0;text-transform:uppercase;font-size:16px}
 <script>
 let map = null, userMarker = null, carteEnCours = false;
 let cercles = [], marqueursGis = [], derniereListe = [];
+let filtreType = 'tous', derniereLat = null, derniereLng = null;
+const TYPES = {
+  gemme:   { label: 'Gemme',   color: '#a855f7' },
+  metal:   { label: 'Métal',   color: '#f59e0b' },
+  fossile: { label: 'Fossile', color: '#22c55e' },
+  mineral: { label: 'Minéral', color: '#b83b5e' }
+};
+function typeGis(g) { return TYPES[g.type] ? g.type : 'mineral'; }
 let systemeDemarre = false, watchReseau = null, watchGPS = null;
 let dernierGPS = 0, positionRecue = false;
 
@@ -131,8 +149,8 @@ function initCarte(lat, lng) {
       if (typeof REPERTOIRE_GISEMENTS !== 'undefined') {
         REPERTOIRE_GISEMENTS.forEach(g => {
           marqueursGis.push(L.circleMarker([g.lat, g.lng], {
-            radius: 7, color: '#fff', weight: 1, fillColor: '#b83b5e', fillOpacity: 0.9
-          }).addTo(map).bindPopup('<b>' + g.nom + '</b><br>' + (g.details || '')));
+            radius: 7, color: '#fff', weight: 1, fillColor: TYPES[typeGis(g)].color, fillOpacity: 0.9
+          }).addTo(map).bindPopup('<b>' + g.nom + '</b> (' + TYPES[typeGis(g)].label + ')<br>' + (g.details || '')));
         });
       }
       // Fond de carte (uniquement si réseau ; sinon le fond bleu nuit reste)
@@ -152,6 +170,16 @@ function majCarte(lat, lng) {
   cercles.forEach(c => c.setLatLng([lat, lng]));
 }
 
+function changerFiltre(v) {
+  filtreType = v;
+  if (map) marqueursGis.forEach((m, i) => {
+    const visible = v === 'tous' || typeGis(REPERTOIRE_GISEMENTS[i]) === v;
+    if (visible) map.addLayer(m); else map.removeLayer(m);
+  });
+  if (derniereLat !== null) genererAffichageGisements(derniereLat, derniereLng);
+  cadrerProches(3);
+}
+
 function cadrerProches(n) {
   if (!map || !userMarker || !derniereListe.length) return;
   const pts = [userMarker.getLatLng()].concat(
@@ -162,7 +190,7 @@ function cadrerProches(n) {
 function cadrerTous() {
   if (!map || !userMarker || typeof REPERTOIRE_GISEMENTS === 'undefined') return;
   const pts = [userMarker.getLatLng()].concat(
-    REPERTOIRE_GISEMENTS.map(g => L.latLng(g.lat, g.lng)));
+    REPERTOIRE_GISEMENTS.filter(g => filtreType === 'tous' || typeGis(g) === filtreType).map(g => L.latLng(g.lat, g.lng)));
   map.fitBounds(L.latLngBounds(pts), { padding: [30, 30] });
 }
 
@@ -194,17 +222,19 @@ function ajouterBoutons() {
 }
 
 function genererAffichageGisements(lat, lng) {
+  derniereLat = lat; derniereLng = lng;
   const ul = document.getElementById('listeGisements');
   if (!ul || typeof REPERTOIRE_GISEMENTS === 'undefined') return;
   const liste = REPERTOIRE_GISEMENTS
     .map((g, i) => ({ g: g, i: i, d: calculerDistance(lat, lng, g.lat, g.lng) }))
+    .filter(x => filtreType === 'tous' || typeGis(x.g) === filtreType)
     .sort((a, b) => a.d - b.d);
   derniereListe = liste;
   ul.innerHTML = liste.map(x =>
-    '<li class="gisement-item" onclick="allerA(' + x.i + ')">' +
+    '<li class="gisement-item" style="border-left-color:' + TYPES[typeGis(x.g)].color + '" onclick="allerA(' + x.i + ')">' +
     '<span class="gisement-name">' + x.g.nom + '</span>' +
     '<span class="gisement-dist">' + x.d.toFixed(1) + ' km</span>' +
-    '<div class="gisement-desc">' + (x.g.details || '') + '</div></li>').join('');
+    '<div class="gisement-desc">' + TYPES[typeGis(x.g)].label + ' · ' + (x.g.details || '') + '</div></li>').join('');
 }
 
 function onLocationError(err) {
