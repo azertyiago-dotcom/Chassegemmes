@@ -80,6 +80,8 @@ jobs:
       run: |
         cd appli_native
         cordova plugin add "cordova-plugin-geolocation@^5.0.0" --save --verbose
+        cordova plugin add cordova-plugin-insomnia --save --verbose
+        cordova plugin add cordova-plugin-vibration --save --verbose
 
     - name: Compilation de l'APK debug
       run: |
